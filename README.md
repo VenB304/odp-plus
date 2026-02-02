@@ -67,6 +67,10 @@ npm run build
 
 The compiled extension will be in the `dist` folder.
 
+## Future Roadmap
+- **JDN+ Support**: Researching compatibility with [justdancenowplus.ru](https://justdancenowplus.ru), including DOM inspection and protocol verification.
+- **Dynamic Asset Injection**: Handling unique asset paths for the modded client to support custom songs.
+
 ## Credits
 
 Based on the original [Online Dance Party](https://codeberg.org/ODP) concept.
