@@ -53,6 +53,8 @@ export class OdpWebSocket extends WebSocket {
     private p2pClient: P2PClient | null = null
     private p2pInitialized = false
     private gameState = new GameStateManager()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private cachedTag: any = null
 
     constructor(
         url: string | URL,
@@ -61,10 +63,18 @@ export class OdpWebSocket extends WebSocket {
     ) {
         super(url, protocols)
 
-        // Initialize P2P for Follower immediately
-        if (this.odpTag != null) {
+        if (this.odpTag) {
             try {
-                const client = JSON.parse(this.odpTag)
+                this.cachedTag = JSON.parse(this.odpTag)
+            } catch (e) {
+                console.error("[ODP] Failed to parse odpTag:", e)
+            }
+        }
+
+        // Initialize P2P for Follower immediately
+        if (this.cachedTag) {
+            try {
+                const client = this.cachedTag
                 if (client.tag === ODPClient.FollowerTag) {
                     const contents = client.contents as
                         | { hostToFollow?: string }
@@ -112,7 +122,7 @@ export class OdpWebSocket extends WebSocket {
         const newOnmessage = (ev: MessageEvent) => {
             // 1. ODP Message Interception (Prevent these from reaching the Game Client)
             if (
-                this.odpTag != null &&
+                this.cachedTag != null &&
                 typeof ev.data === "string" &&
                 ev.data.startsWith("06BJ")
             ) {
@@ -184,11 +194,8 @@ export class OdpWebSocket extends WebSocket {
             // For performance/cleanliness, we should cache the role.
             // But strict parsing here:
             let isHost = false
-            try {
-                const client = JSON.parse(this.odpTag || "{}")
-                isHost = client.tag === ODPClient.HostTag
-            } catch {
-                // ignore
+            if (this.cachedTag) {
+                isHost = this.cachedTag.tag === ODPClient.HostTag
             }
 
             if (isHost && msg) {
@@ -240,14 +247,9 @@ export class OdpWebSocket extends WebSocket {
         // @ts-ignore
         super.onclose = (ev: CloseEvent) => {
             console.log("[ODP] Real WebSocket Closed:", ev.code, ev.reason)
-            if (this.odpTag) {
-                try {
-                    const client = JSON.parse(this.odpTag)
-                    if (client.tag === ODPClient.FollowerTag) {
-                        return // Swallow event
-                    }
-                } catch {
-                    /* intentionally empty */
+            if (this.cachedTag) {
+                if (this.cachedTag.tag === ODPClient.FollowerTag) {
+                    return // Swallow event
                 }
             }
             if (f) {
@@ -261,14 +263,9 @@ export class OdpWebSocket extends WebSocket {
         // @ts-ignore
         super.onerror = (ev: Event) => {
             console.log("[ODP] Real WebSocket Error:", ev)
-            if (this.odpTag) {
-                try {
-                    const client = JSON.parse(this.odpTag)
-                    if (client.tag === ODPClient.FollowerTag) {
-                        return // Swallow event
-                    }
-                } catch {
-                    /* intentionally empty */
+            if (this.cachedTag) {
+                if (this.cachedTag.tag === ODPClient.FollowerTag) {
+                    return // Swallow event
                 }
             }
             if (f) {
@@ -279,14 +276,9 @@ export class OdpWebSocket extends WebSocket {
     }
 
     get readyState(): number {
-        if (this.odpTag) {
-            try {
-                const client = JSON.parse(this.odpTag)
-                if (client.tag === ODPClient.FollowerTag) {
-                    return WebSocket.OPEN
-                }
-            } catch {
-                /* intentionally empty */
+        if (this.cachedTag) {
+            if (this.cachedTag.tag === ODPClient.FollowerTag) {
+                return WebSocket.OPEN
             }
         }
         return super.readyState
@@ -430,12 +422,9 @@ export class OdpWebSocket extends WebSocket {
             const msg = wsStringToObject(data) as JDNMessage
             let isHost = false
             let isFollower = false
-            try {
-                const client = JSON.parse(this.odpTag || "{}")
-                isHost = client.tag === ODPClient.HostTag
-                isFollower = client.tag === ODPClient.FollowerTag
-            } catch {
-                /* intentionally empty */
+            if (this.cachedTag) {
+                isHost = this.cachedTag.tag === ODPClient.HostTag
+                isFollower = this.cachedTag.tag === ODPClient.FollowerTag
             }
 
             if (isHost && msg) {
@@ -456,11 +445,8 @@ export class OdpWebSocket extends WebSocket {
         }
 
         let shouldConnect = true
-        try {
-            const client = JSON.parse(this.odpTag || "{}")
-            if (client.tag === ODPClient.FollowerTag) shouldConnect = false
-        } catch {
-            /* intentionally empty */
+        if (this.cachedTag && this.cachedTag.tag === ODPClient.FollowerTag) {
+            shouldConnect = false
         }
 
         if (shouldConnect) {

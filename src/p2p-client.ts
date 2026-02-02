@@ -29,17 +29,7 @@ export class P2PClient {
         const hostId = this.getPeerId()
         console.log("[P2P] Starting Clock Sync...")
 
-        // NTP-like handshake
-        // T1: Client sends Ping
-        // T2: Server receives Ping
-        // T3: Server sends Pong
-        // T4: Client receives Pong
-
-        // Offset = ((T2 - T1) + (T3 - T4)) / 2
-        // RTT = (T4 - T1) - (T3 - T2)
-
-        // Simplified: We assume Server processes instantly, so T2 approx T3.
-        // Offset = T_server - T_client - RTT/2
+        console.log("[P2P] Starting Clock Sync...")
 
         const t1 = Date.now()
         this.sendTo(hostId, { __type: "__ping", t1 })
@@ -168,18 +158,6 @@ export class P2PClient {
                 const serverTime = data.serverTime
 
                 const rtt = t4 - t1
-                // We estimate that the server sent the message at `serverTime`.
-                // The message took `rtt / 2` to arrive.
-                // So at T4 (now), the real server time is `serverTime + rtt/2`.
-                // Offset = (serverTime + rtt/2) - T4 (Wait, we defined offset as Local - Remote?)
-                // Let's stick to: We want to convert Remote -> Local.
-                // Remote = serverTime
-                // Local corresponding to serverTime is t1 + rtt/2? No.
-
-                // Let's use simple delta:
-                // at T4, Server is roughly `serverTime + rtt/2`.
-                // Delta = T4 - (serverTime + rtt/2).
-                // So: Local = Remote + Delta
 
                 this.clockOffset = t4 - (serverTime + rtt / 2)
                 console.log(
