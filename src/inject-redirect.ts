@@ -4,8 +4,10 @@ import { ODPClient } from "./model/ODPClient"
 
 const defaultServer = "onlinedance.party"
 
-async function getRedirectData(odpClient: ODPClient): Promise<RedirectData | null> {
-    return null; // P2P mode does not use a relay server redirect
+async function getRedirectData(
+    odpClient: ODPClient,
+): Promise<RedirectData | null> {
+    return null // P2P mode does not use a relay server redirect
 }
 
 async function main(): Promise<void> {

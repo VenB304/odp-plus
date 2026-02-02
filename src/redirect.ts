@@ -3,7 +3,7 @@ import { OdpWebSocket } from "./odp-websocket"
 import { waitForElm } from "./wait-for-elem"
 
 // @ts-ignore
-const NativeWebSocket = globalThis.WebSocket;
+const NativeWebSocket = globalThis.WebSocket
 
 function overWriteWebSocket(inData: InjectData) {
     // @ts-ignore
@@ -14,17 +14,13 @@ function overWriteWebSocket(inData: InjectData) {
         // Prevent intercepting PeerJS connections to avoid infinite loop
         if (url.toString().includes("peerjs")) {
             // @ts-ignore
-            return new NativeWebSocket(url, protocols);
+            return new NativeWebSocket(url, protocols)
         }
 
         console.log("ODP intercepted: ", url)
         // In P2P mode, we pass the original URL to OdpWebSocket.
         // OdpWebSocket will handle whether to connect to it (Host) or ignore/mock it (Follower).
-        return new OdpWebSocket(
-            url,
-            protocols ? protocols : [],
-            inData.odpTag,
-        )
+        return new OdpWebSocket(url, protocols ? protocols : [], inData.odpTag)
     }
 }
 
