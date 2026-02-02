@@ -1,4 +1,4 @@
-# ODP+ (Serverless P2P Edition)
+# ODP+ (Serverless P2P)
 
 **Play Just Dance Now with friends anywhere, using a direct Peer-to-Peer connection.**
 
@@ -6,7 +6,7 @@ ODP+ is a modernized, serverless version of the original Online Dance Party exte
 
 ## Features
 
-*   **100% Serverless**: Connects directly via WebRTC (PeerJS). No more "Server Unavailable" errors.
+*   **100% Serverless**: Connects directly via WebRTC (PeerJS).
 *   **Host a Party**: One person acts as the Host.
 *   **Join a Party**: Friends join using the Host's Room ID.
 *   **Perfect Sync**: Automatic clock synchronization and state replay ensures everyone sees the same move at the same time.
