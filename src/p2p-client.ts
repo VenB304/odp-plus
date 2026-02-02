@@ -6,6 +6,10 @@ export type P2POptions = {
     onData?: (data: unknown, peerId: string) => void
 }
 
+function isP2PMessage(data: unknown): data is { __type: string, t1: number, serverTime: number } {
+    return typeof data === 'object' && data !== null && '__type' in data;
+}
+
 export class P2PClient {
     private peer: Peer | null = null
     private connections: Map<string, DataConnection> = new Map()
@@ -76,9 +80,9 @@ export class P2PClient {
                 this.handleConnection(conn, true)
             })
 
-            this.peer.on("error", (err: any) => {
+            this.peer.on("error", (err: unknown) => {
                 console.error(`[P2P] Error:`, err)
-                if (err.type === 'unavailable-id') {
+                if (err && typeof err === 'object' && 'type' in err && (err as { type: string }).type === 'unavailable-id') {
                     if (this.options.isHost && retryCount < 3) {
                         console.warn(`[P2P] Room ID taken. Retrying in 2s...`);
                         setTimeout(() => this.init(retryCount + 1), 2000);
@@ -130,13 +134,13 @@ export class P2PClient {
             }
         })
 
-        conn.on("data", (data: any) => {
-            if (data && data.__type === "__ping" && this.options.isHost) {
+        conn.on("data", (data: unknown) => {
+            if (isP2PMessage(data) && data.__type === "__ping" && this.options.isHost) {
                 // Host replies with server time
                 conn.send({ __type: "__pong", t1: data.t1, serverTime: Date.now() });
                 return;
             }
-            if (data && data.__type === "__pong" && !this.options.isHost) {
+            if (isP2PMessage(data) && data.__type === "__pong" && !this.options.isHost) {
                 const t4 = Date.now();
                 const t1 = data.t1;
                 const serverTime = data.serverTime;
@@ -175,7 +179,7 @@ export class P2PClient {
             }
         })
 
-        conn.on("error", (err: any) => {
+        conn.on("error", (err: unknown) => {
             console.error(`[P2P] Connection error with ${conn.peer}:`, err)
             this.connections.delete(conn.peer)
         })
@@ -184,7 +188,7 @@ export class P2PClient {
     public broadcast(data: unknown) {
         if (this.connections.size === 0) return
 
-        for (const [peerId, conn] of this.connections) {
+        for (const [_peerId, conn] of this.connections) {
             if (conn.open) {
                 conn.send(data)
             }
@@ -197,7 +201,7 @@ export class P2PClient {
             conn.send(data)
         }
     }
-    public on(event: string, callback: (data?: any) => void) {
+    public on(event: string, callback: (data?: unknown) => void) {
         if (event === 'connect') {
             this.callbacks.connect.push(callback);
         } else if (event === 'connection') {
@@ -210,11 +214,11 @@ export class P2PClient {
     }
 
     private callbacks = {
-        connect: [] as ((data?: any) => void)[],
-        connection: [] as ((data?: any) => void)[],
+        connect: [] as ((data?: unknown) => void)[],
+        connection: [] as ((data?: unknown) => void)[],
     }
 
-    private trigger(event: 'connect' | 'connection', data?: any) {
+    private trigger(event: 'connect' | 'connection', data?: unknown) {
         // @ts-ignore
         this.callbacks[event].forEach(cb => cb(data));
     }

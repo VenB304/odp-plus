@@ -66,8 +66,8 @@ export class OdpWebSocket extends WebSocket {
             try {
                 const client = JSON.parse(this.odpTag);
                 if (client.tag === ODPClient.FollowerTag) {
-                    const contents = client.contents as any;
-                    const roomId = contents.hostToFollow || contents;
+                    const contents = client.contents as { hostToFollow?: string } | string;
+                    const roomId = typeof contents === 'string' ? contents : contents.hostToFollow || "";
                     console.log("[ODP] Follower initializing P2P for Room: " + roomId);
                     this.initP2P(false, roomId);
 
@@ -215,7 +215,7 @@ export class OdpWebSocket extends WebSocket {
                     if (client.tag === ODPClient.FollowerTag) {
                         return; // Swallow event
                     }
-                } catch { }
+                } catch { /* intentionally empty */ }
             }
             if (f) {
                 // @ts-ignore
@@ -234,7 +234,7 @@ export class OdpWebSocket extends WebSocket {
                     if (client.tag === ODPClient.FollowerTag) {
                         return; // Swallow event
                     }
-                } catch { }
+                } catch { /* intentionally empty */ }
             }
             if (f) {
                 // @ts-ignore
@@ -250,7 +250,7 @@ export class OdpWebSocket extends WebSocket {
                 if (client.tag === ODPClient.FollowerTag) {
                     return WebSocket.OPEN;
                 }
-            } catch { }
+            } catch { /* intentionally empty */ }
         }
         return super.readyState;
     }
@@ -268,7 +268,8 @@ export class OdpWebSocket extends WebSocket {
         });
 
         if (isHost) {
-            this.p2pClient.on('connection', (peerId: string) => {
+            this.p2pClient.on('connection', (peerIdWithUnknown: unknown) => {
+                const peerId = peerIdWithUnknown as string;
                 console.log("[ODP] New Peer Connected: " + peerId);
                 if (this.cachedRegisterRoomMsg) {
                     console.log("[ODP] Sending handshake to new peer");
@@ -329,7 +330,7 @@ export class OdpWebSocket extends WebSocket {
         }
     }
 
-    private handleP2PData(data: any, peerId: string) {
+    private handleP2PData(data: unknown, _peerId: string) {
         // console.log("[ODP] P2P Received:", data); // Verbose
         const dataStr = wsObjectToString(data);
         const event = new MessageEvent('message', {
@@ -347,14 +348,14 @@ export class OdpWebSocket extends WebSocket {
 
     send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
         if (typeof data === "string") {
-            const msg = wsStringToObject(data) as any;
+            const msg = wsStringToObject(data) as JDNMessage;
             let isHost = false;
             let isFollower = false;
             try {
                 const client = JSON.parse(this.odpTag || '{}');
                 isHost = client.tag === ODPClient.HostTag;
                 isFollower = client.tag === ODPClient.FollowerTag;
-            } catch { }
+            } catch { /* intentionally empty */ }
 
             if (isHost && msg) {
                 if (JDNProtocol.extractFunctionString(data) === "songStart") {
@@ -377,7 +378,7 @@ export class OdpWebSocket extends WebSocket {
         try {
             const client = JSON.parse(this.odpTag || '{}');
             if (client.tag === ODPClient.FollowerTag) shouldConnect = false;
-        } catch { }
+        } catch { /* intentionally empty */ }
 
         if (shouldConnect) {
             return super.send(data)
