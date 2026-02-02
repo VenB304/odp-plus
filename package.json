@@ -1,0 +1,32 @@
+{
+    "name": "odp-plus",
+    "version": "2.0.0",
+    "description": "Serverless P2P multiplayer for Just Dance Now.",
+    "scripts": {
+        "start": "npm run build && web-ext run --source-dir dist --url https://justdancenow.com",
+        "startC": "npm start -- -t chromium",
+        "build": "tsc && shx mkdir -p dist/js/bundle && esbuild dist/js/inject-redirect.js --bundle --outfile=dist/js/bundle/inject-redirect.js && esbuild dist/js/redirect.js --bundle --outfile=dist/js/bundle/redirect.js && shx mkdir -p dist/js/deps && shx cp node_modules/webextension-polyfill/dist/browser-polyfill.min.js dist/js/deps/browser-polyfill.js && shx cp src/manifest.json dist/manifest.json && shx cp -r src/css dist/css",
+        "watch": "npm run build; while inotifywait -r src; do npm run build; done",
+        "lint": "eslint . --ext .js,.jsx,.ts,.tsx,.json",
+        "format": "npx prettier@3.3.3 . --write",
+        "check": "npm run build && npm run lint && bash format-check.sh && tsc && echo 'No errors'",
+        "clean": "shx rm -rf dist/js",
+        "release": "npm run clean && npm run build && shx mkdir -p ../ODP_Release/ && cd dist && zip -r \"../../ODP_Release/odp-plus-v2.0\".zip ."
+    },
+    "author": "ODP+ Contributors",
+    "license": "AGPL-3.0-or-later",
+    "devDependencies": {
+        "@types/firefox-webext-browser": "120.0.4",
+        "@typescript-eslint/eslint-plugin": "7.18.0",
+        "@typescript-eslint/parser": "7.18.0",
+        "esbuild": "0.23.0",
+        "eslint": "8.57.0",
+        "eslint-config-prettier": "9.1.0",
+        "peerjs": "^1.5.5",
+        "prettier": "3.3.3",
+        "shx": "^0.4.0",
+        "typescript": "5.5.4",
+        "web-ext": "8.9.0",
+        "webextension-polyfill": "0.12.0"
+    }
+}

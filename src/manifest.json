@@ -1,0 +1,73 @@
+{
+    "manifest_version": 3,
+    "name": "ODP+ (P2P Edition)",
+    "version": "2.0.0",
+    "description": "Serverless P2P multiplayer for Just Dance Now.",
+    "homepage_url": "https://github.com/v-b",
+    "icons": {
+        "48": "img/icon.png",
+        "96": "img/icon.png",
+        "128": "img/icon.png"
+    },
+    "permissions": [
+        "storage"
+    ],
+    "host_permissions": [
+        "*://*.justdancenow.com/*",
+        "*://*.justdancenowplus.ru/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://justdancenow.com/",
+                "https://www.justdancenow.com/",
+                "https://justdancenowplus.ru/",
+                "https://www.justdancenowplus.ru/"
+            ],
+            "js": [
+                "js/deps/browser-polyfill.js",
+                "js/bundle/inject-redirect.js"
+            ]
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "js/bundle/redirect.js"
+            ],
+            "matches": [
+                "https://justdancenow.com/*",
+                "https://www.justdancenow.com/*",
+                "https://justdancenowplus.ru/*",
+                "https://www.justdancenowplus.ru/*"
+            ]
+        }
+    ],
+    "page_action": {
+        "default_icon": {
+            "48": "img/icon.png",
+            "96": "img/icon.png",
+            "128": "img/icon.png"
+        },
+        "default_title": "ODP+",
+        "default_popup": "popup.html",
+        "show_matches": [
+            "*://*.justdancenow.com/*",
+            "*://*.justdancenowplus.ru/*"
+        ]
+    },
+    "action": {
+        "default_icon": {
+            "48": "img/icon.png",
+            "96": "img/icon.png",
+            "128": "img/icon.png"
+        },
+        "default_title": "ODP+",
+        "default_popup": "popup.html"
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "{8174d506-9c65-472f-933a-9e9450d30472}"
+        }
+    }
+}

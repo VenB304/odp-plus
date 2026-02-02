@@ -1,0 +1,4 @@
+dist/js/
+tsconfig.json
+*.md
+dist/css/simple.css

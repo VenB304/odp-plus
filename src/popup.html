@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="css/simple.css" />
+    <link rel="stylesheet" href="css/odp.css" />
+</head>
+
+<body>
+    <header>
+        <h1>ODP+ <small>(Serverless)</small></h1>
+    </header>
+
+    <main>
+        <form id="form">
+            <!-- Mode Selection -->
+            <div class="odp-box">
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Host" id="host">
+                    <div class="card-content">
+                        <strong>🎉 Host a Party</strong>
+                        <small>Start a JDN room. Your Room ID is the Code.</small>
+                    </div>
+                </label>
+
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Follower" id="follower">
+                    <div class="card-content">
+                        <strong>🕺 Join a Party</strong>
+                        <small>Enter the Host's Room ID below.</small>
+                    </div>
+                </label>
+
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Disabled" id="disabled">
+                    <div class="card-content">
+                        <strong>❌ Disable</strong>
+                        <small>Turn off ODP+ features.</small>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Input Section -->
+            <div id="follower-input-section" class="odp-input-group hidden">
+                <label for="follow-code">Room ID:</label>
+                <input type="text" id="follow-code" name="follow-code" placeholder="e.g. 1999" class="odp-ri"
+                    disabled />
+            </div>
+
+            <div class="actions">
+                <button type="submit" id="apply" class="primary-btn">Update Settings</button>
+            </div>
+        </form>
+
+        <div class="footer">
+            <a href="https://github.com/v-b" target="_blank">ODP+ P2P Edition</a>
+        </div>
+    </main>
+
+    <script type="application/javascript" src="js/deps/browser-polyfill.js"></script>
+    <script type="module" src="js/popup.js"></script>
+</body>
+
+</html>
