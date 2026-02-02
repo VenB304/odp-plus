@@ -11,34 +11,55 @@ export class P2PClient {
     private connections: Map<string, DataConnection> = new Map()
     private options: P2POptions
     private initialized = false
+    public clockOffset = 0; // Local Time - Remote Time (Add this to Remote Time to get Local Time)
 
     constructor(options: P2POptions) {
         this.options = options
         this.init()
     }
 
+    public async syncClock() {
+        if (this.options.isHost) return;
+        const hostId = this.getPeerId();
+        console.log("[P2P] Starting Clock Sync...");
+
+        // NTP-like handshake
+        // T1: Client sends Ping
+        // T2: Server receives Ping
+        // T3: Server sends Pong
+        // T4: Client receives Pong
+
+        // Offset = ((T2 - T1) + (T3 - T4)) / 2
+        // RTT = (T4 - T1) - (T3 - T2)
+
+        // Simplified: We assume Server processes instantly, so T2 approx T3.
+        // Offset = T_server - T_client - RTT/2
+
+        const t1 = Date.now();
+        this.sendTo(hostId, { __type: "__ping", t1 });
+    }
+
     private getPeerId(): string {
         return `odp-${this.options.roomId.toLowerCase()}`
     }
 
-    private async init() {
+    private async init(retryCount = 0) {
         if (this.initialized) return
 
         let peerId: string | undefined
 
         if (this.options.isHost) {
             peerId = this.getPeerId()
-            console.log(`[P2P] Initializing Host with ID: ${peerId}`)
+            console.log(`[P2P] Initializing Host with ID: ${peerId} (Attempt ${retryCount + 1})`)
         } else {
             console.log(`[P2P] Initializing Follower`)
-            // Follower uses undefined (random ID)
             peerId = undefined;
         }
 
         try {
             // @ts-ignore
             this.peer = new Peer(peerId, {
-                debug: 2,
+                debug: 1, // Reduced debug level
             })
 
             this.peer.on("open", (id: string) => {
@@ -58,7 +79,12 @@ export class P2PClient {
             this.peer.on("error", (err: any) => {
                 console.error(`[P2P] Error:`, err)
                 if (err.type === 'unavailable-id') {
-                    console.error('[P2P] Room ID is taken. Is a host already running?')
+                    if (this.options.isHost && retryCount < 3) {
+                        console.warn(`[P2P] Room ID taken. Retrying in 2s...`);
+                        setTimeout(() => this.init(retryCount + 1), 2000);
+                        return;
+                    }
+                    console.error('[P2P] Room ID is permanently unavailable. Is another host running?')
                 }
             })
 
@@ -67,7 +93,7 @@ export class P2PClient {
         }
     }
 
-    private connectToHost() {
+    private connectToHost(retryCount = 0) {
         if (!this.peer) return
         const hostId = this.getPeerId()
         console.log(`[P2P] Connecting to Host: ${hostId}`)
@@ -75,6 +101,20 @@ export class P2PClient {
         const conn = this.peer.connect(hostId, {
             reliable: true
         })
+
+        // Simple connection timeout/retry
+        const connectionTimeout = setTimeout(() => {
+            if (!conn.open && retryCount < 5) {
+                console.log("[P2P] Connection timed out, retrying...");
+                conn.close();
+                this.connectToHost(retryCount + 1);
+            }
+        }, 5000);
+
+        conn.on("open", () => {
+            clearTimeout(connectionTimeout);
+        });
+
         this.handleConnection(conn, false)
     }
 
@@ -90,8 +130,36 @@ export class P2PClient {
             }
         })
 
-        conn.on("data", (data: unknown) => {
-            // console.log(`[P2P] Received data from ${conn.peer}:`, data)
+        conn.on("data", (data: any) => {
+            if (data && data.__type === "__ping" && this.options.isHost) {
+                // Host replies with server time
+                conn.send({ __type: "__pong", t1: data.t1, serverTime: Date.now() });
+                return;
+            }
+            if (data && data.__type === "__pong" && !this.options.isHost) {
+                const t4 = Date.now();
+                const t1 = data.t1;
+                const serverTime = data.serverTime;
+
+                const rtt = t4 - t1;
+                // We estimate that the server sent the message at `serverTime`.
+                // The message took `rtt / 2` to arrive.
+                // So at T4 (now), the real server time is `serverTime + rtt/2`.
+                // Offset = (serverTime + rtt/2) - T4 (Wait, we defined offset as Local - Remote?)
+                // Let's stick to: We want to convert Remote -> Local.
+                // Remote = serverTime
+                // Local corresponding to serverTime is t1 + rtt/2? No.
+
+                // Let's use simple delta:
+                // at T4, Server is roughly `serverTime + rtt/2`.
+                // Delta = T4 - (serverTime + rtt/2).
+                // So: Local = Remote + Delta
+
+                this.clockOffset = t4 - (serverTime + (rtt / 2));
+                console.log(`[P2P] Sync Complete. RTT: ${rtt}ms, Clock Delta: ${this.clockOffset}ms`);
+                return;
+            }
+
             if (this.options.onData) {
                 this.options.onData(data, conn.peer)
             }
@@ -100,6 +168,11 @@ export class P2PClient {
         conn.on("close", () => {
             console.log(`[P2P] Connection closed: ${conn.peer}`)
             this.connections.delete(conn.peer)
+            // If we are follower and lost host, maybe try to reconnect?
+            if (!this.options.isHost && !isIncoming) {
+                console.log("[P2P] Lost connection to Host. Attempting reconnect in 3s...");
+                setTimeout(() => this.connectToHost(), 3000);
+            }
         })
 
         conn.on("error", (err: any) => {

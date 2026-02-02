@@ -1,0 +1,154 @@
+/* Global variables. */
+:root,
+::backdrop {
+    --accent: #653295;
+    --accent-bg: #fafafa;
+    --accent-hover: #8455c0;
+    --text: #333;
+    --border: #ccc;
+    --card-bg: #fff;
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+    :root,
+    ::backdrop {
+        color-scheme: dark;
+        --accent: #955bfb;
+        --accent-hover: #7147c3;
+        --text: #eee;
+        --accent-bg: #1e1e1e;
+        --border: #444;
+        --card-bg: #2b2b2b;
+    }
+}
+
+body {
+    width: 320px; /* Standard extension width */
+    font-size: 0.9rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 1rem;
+    color: var(--text);
+    background-color: var(--accent-bg);
+}
+
+header h1 {
+    font-size: 1.5rem;
+    color: var(--accent);
+    margin: 0 0 1rem 0;
+    text-align: center;
+}
+
+header small {
+    font-weight: normal;
+    color: var(--text);
+    opacity: 0.7;
+    font-size: 0.8rem;
+}
+
+.odp-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.odp-card {
+    display: flex;
+    align-items: center;
+    padding: 0.8rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.odp-card:hover {
+    border-color: var(--accent);
+}
+
+/* Highlight selected card */
+.odp-card:has(input:checked) {
+    border-color: var(--accent);
+    background-color: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+}
+
+.card-content {
+    margin-left: 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-content strong {
+    font-size: 1rem;
+}
+
+.card-content small {
+    opacity: 0.8;
+}
+
+.odp-input-group {
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background: var(--card-bg);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.odp-input-group label {
+    display: block;
+    margin-bottom: 0.3rem; 
+    font-weight: bold;
+}
+
+.odp-ri {
+    width: 100%;
+    padding: 0.5rem;
+    font-size: 1.1rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-sizing: border-box; /* Fix width overflow */
+}
+
+.actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: center;
+}
+
+.primary-btn {
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.7rem 1.5rem;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.primary-btn:hover {
+    background-color: var(--accent-hover);
+}
+
+.footer {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.footer a {
+    color: var(--text);
+    opacity: 0.5;
+    text-decoration: none;
+}
+.footer a:hover {
+    opacity: 1;
+}
+
+.hidden {
+    display: none;
+}

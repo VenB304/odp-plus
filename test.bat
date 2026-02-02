@@ -4,3 +4,4 @@
 @REM start "npm-startC" cmd /k npm run startC
 
 start "npm-startC" cmd /k npm run startC
+start "npm-startC" cmd /k npm run startC
