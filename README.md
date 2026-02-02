@@ -1,16 +1,15 @@
-# ODP+ (Serverless P2P)
+# ODP+ - Serverless P2P
 
 **Play Just Dance Now with friends anywhere, using a direct Peer-to-Peer connection.**
 
-ODP+ is a modernized, serverless version of the original Online Dance Party extension. It allows you to sync your Just Dance Now screen with friends over the internet without relying on any central game server.
+ODP+ is a serverless implementation of the original Online Dance Party extension. It enables synchronization of Just Dance Now sessions between clients using a direct peer-to-peer connection.
 
 ## Features
 
-*   **100% Serverless**: Connects directly via WebRTC (PeerJS).
-*   **Host a Party**: One person acts as the Host.
-*   **Join a Party**: Friends join using the Host's Room ID.
-*   **Perfect Sync**: Automatic clock synchronization and state replay ensures everyone sees the same move at the same time.
-*   **Privacy Focused**: No gameplay data is sent to third-party ODP servers.
+*   **Serverless Architecture**: Connects directly via WebRTC (PeerJS).
+*   **Host a Party**: One client acts as the Host.
+*   **Join a Party**: Other clients connect using the Host's Room ID.
+*   **Synchronized Playback**: Implements clock synchronization and state replay to align gameplay across devices.
 
 ## Installation
 
@@ -35,23 +34,25 @@ ODP+ is a modernized, serverless version of the original Online Dance Party exte
 1.  Open [Just Dance Now](https://justdancenow.com) (or JDN+).
 2.  Start a Dance Room.
 3.  Click the **ODP+ Extension Icon**.
-4.  Select **"Host a Party"** and click **Update Settings**.
+4.  Select **"Host a Party"** and click **Apply**.
 5.  **Share your Room ID** with your friends.
+6.  Join the room on your phone (using the same Room ID).
+7.  Wait for your friends to join the room.
+8.  Start a song.
 
 ### As a Follower
 1.  Open [Just Dance Now](https://justdancenow.com) (or JDN+).
 2.  Click the **ODP+ Extension Icon**.
 3.  Select **"Join a Party"**.
 4.  Enter the **Room ID** provided by the Host.
-5.  Click **Update Settings**.
+5.  Click **Apply**.
 6.  Join the room on your phone (using the same Room ID).
 7.  Wait for the Host to start a song!
 
 ## Troubleshooting
 
-*   **Reload Loop?**: If the page keeps reloading, ensure you have the latest version. We fixed a major issue where JDN servers disconnected silent followers.
-*   **No Sync?**: Ensure both Host and Follower are on the same version of the extension.
-*   **Sync Issues?**: The video plays directly from JDN servers on your device. However, if the Host has a poor internet connection, the "Start/Stop" signals might misfire, causing your game to pause or jump to catch up.
+*   **Reload Loop**: If the page reloads repeatedly, ensure you have the latest version.
+*   **Sync Issues**: Playback is synchronized using control signals. Poor connection quality on the Host's side may affect signal delivery, potentially causing pauses or skips on Follower devices.
 
 ## Development
 
@@ -68,8 +69,8 @@ npm run build
 The compiled extension will be in the `dist` folder.
 
 ## Future Roadmap
-- **JDN+ Support**: Researching compatibility with [justdancenowplus.ru](https://justdancenowplus.ru), including DOM inspection and protocol verification.
-- **Dynamic Asset Injection**: Handling unique asset paths for the modded client to support custom songs.
+- **JDN+ Support**: Investigating compatibility with [justdancenowplus.ru](https://justdancenowplus.ru).
+- **Dynamic Asset Injection**: Support for custom asset paths.
 
 ## Credits
 
