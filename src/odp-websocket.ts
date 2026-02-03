@@ -11,11 +11,12 @@ import {
 } from "./odp-msg"
 import { ODPClient } from "./model/ODPClient"
 import { waitForElm } from "./wait-for-elem"
-import { P2PClient } from "./p2p-client"
-import { GameStateManager, JDNMessage } from "./model/GameStateManager"
+import { JDNMessage } from "./model/GameStateManager"
+import { P2POrchestrator } from "./P2POrchestrator"
+import { safeJsonParse } from "./validation"
 
 function correctVideoTime(hostStartTime: number) {
-    // @ts-ignore
+    // @ts-ignore - accessing JDN game global
     const video = $("#in-game_video")[0]
     const currentPosition = video.currentTime * 1000
     const hostVideoTime = Date.now() - hostStartTime
@@ -28,7 +29,7 @@ function correctVideoTime(hostStartTime: number) {
 async function songStartSync(hostStartTime: number) {
     try {
         const waitStartTime = Date.now()
-        // @ts-ignore
+        // @ts-ignore - accessing JDN game global
         while (!globalThis.jd.video.started) {
             if (Date.now() >= waitStartTime + 10 * 1000) {
                 return
@@ -50,12 +51,21 @@ async function songStartSync(hostStartTime: number) {
     }
 }
 
+interface ParsedODPTag {
+    tag: string
+    contents: { hostToFollow?: string } | string
+}
+
 export class OdpWebSocket extends WebSocket {
-    private p2pClient: P2PClient | null = null
-    private p2pInitialized = false
-    private gameState = new GameStateManager()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private cachedTag: any = null
+    private orchestrator: P2POrchestrator | null = null
+    private cachedTag: ParsedODPTag | null = null
+    private isHost = false
+    private isFollower = false
+
+    // Store the game's handler
+    private gameOnMessage:
+        | ((this: WebSocket, ev: MessageEvent) => unknown)
+        | null = null
 
     constructor(
         url: string | URL,
@@ -64,65 +74,52 @@ export class OdpWebSocket extends WebSocket {
     ) {
         super(url, protocols)
 
+        // Parse and cache the ODP tag
         if (this.odpTag) {
-            try {
-                this.cachedTag = JSON.parse(this.odpTag)
-            } catch (e) {
-                console.error("[ODP] Failed to parse odpTag:", e)
+            this.cachedTag = safeJsonParse<ParsedODPTag>(this.odpTag)
+            if (this.cachedTag) {
+                this.isHost = this.cachedTag.tag === ODPClient.HostTag
+                this.isFollower = this.cachedTag.tag === ODPClient.FollowerTag
             }
         }
 
-        // Initialize P2P for Follower immediately
+        // Initialize orchestrator
         if (this.cachedTag) {
-            try {
-                const client = this.cachedTag
-                if (client.tag === ODPClient.FollowerTag) {
-                    const contents = client.contents as
-                        | { hostToFollow?: string }
-                        | string
-                    const roomId =
-                        typeof contents === "string"
-                            ? contents
-                            : contents.hostToFollow || ""
-                    console.log(
-                        "[ODP] Follower initializing P2P for Room: " + roomId,
-                    )
-                    this.initP2P(false, roomId)
+            this.orchestrator = new P2POrchestrator({
+                getWebSocketUrl: () => this.url,
+                onP2PData: (data, peerId) => this.handleP2PData(data, peerId),
+            })
 
-                    // Trigger Clock Sync shortly after init (or when connected)
-                    setTimeout(() => {
-                        this.p2pClient?.syncClock()
-                    }, 2000) // Give time for connection
-                } else if (client.tag === ODPClient.HostTag) {
-                    console.log(
-                        "[ODP] Host initializing (waiting for JDN connect)",
-                    )
-                }
-            } catch (e) {
-                console.error("[ODP] Failed to parse odpTag:", e)
+            // Initialize P2P for Follower immediately
+            if (this.isFollower) {
+                const contents = this.cachedTag.contents
+                const roomId =
+                    typeof contents === "string"
+                        ? contents
+                        : contents.hostToFollow || ""
+                console.log(
+                    "[ODP] Follower initializing P2P for Room: " + roomId,
+                )
+                this.orchestrator.initialize(false, roomId)
+
+                // Trigger Clock Sync shortly after init
+                setTimeout(() => {
+                    this.orchestrator?.syncClock()
+                }, 2000)
+            } else if (this.isHost) {
+                console.log(
+                    "[ODP] Host initializing (waiting for JDN connect)",
+                )
             }
         }
     }
 
-    private hasSendFirstMessage = false
-    private hostSongAlreadyStarted = false
-    private cachedRegisterRoomMsg: JDNMessage | null = null
-
-    private initializingPeers = new Set<string>()
-    private peersWaitingForSong = new Set<string>() // Late joiners waiting for song to end
-
-    // Store the game's handler
-    private gameOnMessage:
-        | ((this: WebSocket, ev: MessageEvent) => unknown)
-        | null = null
-
-    // We need to intercept the 'onmessage' setter to inject our logic
+    // Intercept onmessage setter to inject our logic
     set onmessage(f: ((this: WebSocket, ev: MessageEvent) => unknown) | null) {
-        this.gameOnMessage = f // Store the original handler
+        this.gameOnMessage = f
 
-        // Custom onmessage handler that wraps the original one
         const newOnmessage = (ev: MessageEvent) => {
-            // 1. ODP Message Interception (Prevent these from reaching the Game Client)
+            // 1. ODP Message Interception
             if (
                 this.cachedTag != null &&
                 typeof ev.data === "string" &&
@@ -135,325 +132,191 @@ export class OdpWebSocket extends WebSocket {
                     )
                     return
                 } else if (odpMsg instanceof Connected) {
-                    waitForElm(".danceroom__label").then((p) => {
-                        if (!(p instanceof HTMLParagraphElement)) return
-                        const observer = new MutationObserver((_) => {
-                            if (p.innerText != odpMsg.hostId) {
-                                p.innerText = odpMsg.hostId
-                            }
-                        })
-                        observer.observe(p, {
-                            attributes: true,
-                            subtree: true,
-                            childList: true,
-                        })
-                        p.innerText = odpMsg.hostId
-                    })
-                    const localRegion = getJDNRegion(this.url)
-                    if (
-                        odpMsg.region &&
-                        localRegion.regionCode !== "unknown" &&
-                        odpMsg.region !== localRegion.regionCode
-                    ) {
-                        const hostRegionName =
-                            getJDNRegion(odpMsg.region).humanReadable
-                        const localRegionName = localRegion.humanReadable
-
-                        // @ts-ignore
-                        globalThis.jd.popUp.build({
-                            title: "VPN Required",
-                            content: `The host is connected to the Just Dance server in ${hostRegionName} while you are connected to the Just Dance Server in ${localRegionName}. To be able to join the Dance Room with your phone, you will need to use a VPN app with a VPN server close to the server of the host. Otherwise, you will get an error message that says that the dance room does not exist.`,
-                            isError: false,
-                        })
-                    }
+                    this.handleConnectedMessage(odpMsg)
                     return // SWALLOW MESSAGE
                 } else if (odpMsg instanceof SongStart) {
-                    let adjustedTime = odpMsg.startTime
-                    if (this.p2pClient) {
-                        // odpMsg.startTime is in Host Time.
-                        // We want Local Time.
-                        // Local = Host + Offset
-                        // Wait, my offset calculation was Local - Remote.
-                        // offset = T4 - (Server + RTT/2) = Local - Remote.
-                        // So Local = Remote + Offset.
-                        // Correct.
-                        adjustedTime += this.p2pClient.clockOffset
-                        console.log(
-                            `[ODP] Sync: Adjusting Host Time ${odpMsg.startTime} by ${this.p2pClient.clockOffset}ms -> ${adjustedTime}`,
-                        )
-                    }
-                    songStartSync(adjustedTime)
+                    this.handleSongStartMessage(odpMsg)
                     return // SWALLOW MESSAGE
                 } else if (odpMsg instanceof ServerMsg) {
-                    // @ts-ignore
-                    if (globalThis.jd && globalThis.jd.popUp) {
-                        // @ts-ignore
-                        globalThis.jd.popUp.build({
-                            title: odpMsg.title,
-                            content: odpMsg.content,
-                            isError: odpMsg.isError,
-                            timer: odpMsg.timer,
-                            hideCancelation: odpMsg.hideCancellation,
-                        })
-                    }
+                    this.handleServerMessage(odpMsg)
                     return // SWALLOW MESSAGE
                 }
             }
 
-            // Logic to capture Room ID from JDN messages (for Host)
+            // 2. Parse JDN message for state tracking
             let msg: JDNMessage | null = null
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                msg = wsStringToObject(ev.data) as any
-            } catch (e) {
-                // Not a JDN object
-            }
-
-            // We need to parse odpTag again to check role (or cache it)
-            // For performance/cleanliness, we should cache the role.
-            // But strict parsing here:
-            let isHost = false
-            if (this.cachedTag) {
-                isHost = this.cachedTag.tag === ODPClient.HostTag
-            }
-
-            if (isHost && msg) {
-                // Connection Logic
-                if (
-                    (msg.func === "connect" && msg.roomNumber) ||
-                    (msg.func === "registerRoom" && msg.roomID)
-                ) {
-                    this.cachedRegisterRoomMsg = msg
-                    const roomId = msg.roomNumber || msg.roomID
-                    console.log("[ODP] Host connected to Room: " + roomId)
-                    this.initP2P(true, roomId.toString())
-                } else if (msg.roomNumber && !this.p2pInitialized) {
-                    // Fallback
-                    console.log(
-                        "[ODP] Found roomNumber in msg (" +
-                        msg.func +
-                        "): " +
-                        msg.roomNumber,
-                    )
-                    this.initP2P(true, msg.roomNumber.toString())
-                }
-
-                // Game State Tracking
-                this.gameState.handleMessage(msg)
-
-                // Clear waiting peers when song ends
-                if (
-                    msg.func === "songEnd" ||
-                    msg.func === "returnToLobby"
-                ) {
-                    this.peersWaitingForSong.clear()
-                }
-
-                // Gameplay messages that require the follower to be in-game
-                const gameplayFuncs = [
-                    "playerFeedBack",
-                    "playerScore",
-                    "playerMoves",
-                ]
-                const isGameplayMsg = gameplayFuncs.includes(msg.func)
-
-                // Broadcast messages to Followers
-                if (this.p2pClient) {
-                    const allPeers = this.p2pClient.getPeerIds()
-                    allPeers.forEach((peerId) => {
-                        // Skip if still initializing
-                        if (this.initializingPeers.has(peerId)) return
-                        // Skip gameplay messages for late joiners
-                        if (
-                            isGameplayMsg &&
-                            this.peersWaitingForSong.has(peerId)
-                        )
-                            return
-                        this.p2pClient?.sendTo(peerId, msg)
-                    })
+            if (typeof ev.data === "string" && !ev.data.startsWith("06BJ")) {
+                try {
+                    msg = wsStringToObject(ev.data) as JDNMessage
+                } catch {
+                    // Not a JDN object
                 }
             }
 
+            // 3. Host-specific logic
+            if (this.isHost && msg) {
+                this.handleHostMessage(msg)
+            }
+
+            // 4. Call original game handler
             if (this.gameOnMessage) {
-                // @ts-ignore
+                // @ts-ignore - calling with correct this context
                 return this.gameOnMessage.call(this, ev)
             }
         }
 
-        // @ts-ignore
+        // @ts-ignore - setting inherited property
         super.onmessage = newOnmessage
     }
 
     set onclose(f: ((this: WebSocket, ev: CloseEvent) => unknown) | null) {
-        // @ts-ignore
+        // @ts-ignore - setting inherited property
         super.onclose = (ev: CloseEvent) => {
             console.log("[ODP] Real WebSocket Closed:", ev.code, ev.reason)
-            if (this.cachedTag) {
-                if (this.cachedTag.tag === ODPClient.FollowerTag) {
-                    return // Swallow event
-                }
-            }
+            // Swallow close for Followers (they use P2P)
+            if (this.isFollower) return
             if (f) {
-                // @ts-ignore
+                // @ts-ignore - calling with correct this context
                 f.call(this, ev)
             }
         }
     }
 
     set onerror(f: ((this: WebSocket, ev: Event) => unknown) | null) {
-        // @ts-ignore
+        // @ts-ignore - setting inherited property
         super.onerror = (ev: Event) => {
             console.log("[ODP] Real WebSocket Error:", ev)
-            if (this.cachedTag) {
-                if (this.cachedTag.tag === ODPClient.FollowerTag) {
-                    return // Swallow event
-                }
-            }
+            // Swallow error for Followers (they use P2P)
+            if (this.isFollower) return
             if (f) {
-                // @ts-ignore
+                // @ts-ignore - calling with correct this context
                 f.call(this, ev)
             }
         }
     }
 
     get readyState(): number {
-        if (this.cachedTag) {
-            if (this.cachedTag.tag === ODPClient.FollowerTag) {
-                return WebSocket.OPEN
-            }
-        }
+        // Followers always appear connected (using P2P)
+        if (this.isFollower) return WebSocket.OPEN
         return super.readyState
     }
 
-    private initP2P(isHost: boolean, roomId: string) {
-        if (this.p2pInitialized) return
-        this.p2pInitialized = true
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+        if (typeof data === "string") {
+            const func = JDNProtocol.extractFunctionString(data)
 
-        this.p2pClient = new P2PClient({
-            isHost,
-            roomId,
-            onData: (data, peerId) => {
-                this.handleP2PData(data, peerId)
-            },
+            if (this.isHost && func === "songStart") {
+                console.log("[ODP] Host Starting Song -> Broadcast P2P")
+                try {
+                    const msg = wsStringToObject(data) as JDNMessage
+                    this.orchestrator?.handleMessage(msg)
+                    this.orchestrator?.broadcastRaw(msg)
+                } catch {
+                    // Continue with send
+                }
+            } else if (this.isFollower) {
+                // Handle follower-specific messages
+                if (func === "ping") {
+                    this.handleP2PData({ func: "pong" }, "internal-auto-pong")
+                }
+                return // Don't send to real WebSocket
+            }
+        }
+
+        // Only host sends to real WebSocket
+        if (!this.isFollower) {
+            return super.send(data)
+        }
+    }
+
+    // --- Private Handlers ---
+
+    private handleConnectedMessage(odpMsg: Connected): void {
+        waitForElm(".danceroom__label").then((p) => {
+            if (!(p instanceof HTMLParagraphElement)) return
+            const observer = new MutationObserver(() => {
+                if (p.innerText != odpMsg.hostId) {
+                    p.innerText = odpMsg.hostId
+                }
+            })
+            observer.observe(p, {
+                attributes: true,
+                subtree: true,
+                childList: true,
+            })
+            p.innerText = odpMsg.hostId
         })
 
-        if (isHost) {
-            this.p2pClient.on("connection", (peerIdWithUnknown: unknown) => {
-                const peerId = peerIdWithUnknown as string
-                console.log("[ODP] New Peer Connected: " + peerId)
-                if (this.cachedRegisterRoomMsg) {
-                    console.log("[ODP] Sending handshake to new peer")
-                    let delay = 0
-                    const peerIdCapture = peerId
+        // Check region mismatch
+        const localRegion = getJDNRegion(this.url)
+        if (
+            odpMsg.region &&
+            localRegion.regionCode !== "unknown" &&
+            odpMsg.region !== localRegion.regionCode
+        ) {
+            const hostRegionName = getJDNRegion(odpMsg.region).humanReadable
+            const localRegionName = localRegion.humanReadable
 
-                    // 1. Clock Sync
-                    const now = Date.now()
-                    for (let i = 0; i < 5; i++) {
-                        setTimeout(
-                            () => {
-                                this.p2pClient?.sendTo(peerIdCapture, {
-                                    func: "sync",
-                                    sync: {
-                                        o: now + i * 100,
-                                        r: 0,
-                                        t: 0,
-                                        d: 0,
-                                    },
-                                })
-                            },
-                            (delay += 100),
-                        )
-                    }
-
-                    setTimeout(
-                        () => {
-                            this.p2pClient?.sendTo(peerIdCapture, {
-                                func: "clientSyncCompleted",
-                                latency: 50,
-                                clockOffset: 0,
-                                scoringWindowWidth: 1,
-                                serverTime: Date.now(),
-                            })
-                        },
-                        (delay += 100),
-                    )
-
-                    // 2. RegisterRoom
-                    setTimeout(
-                        () => {
-                            const regMsg = this.cachedRegisterRoomMsg
-                            if (regMsg) {
-                                this.p2pClient?.sendTo(peerIdCapture, regMsg)
-                            }
-                        },
-                        (delay += 100),
-                    )
-
-                    // 3. Connected
-                    setTimeout(
-                        () => {
-                            const regMsg = this.cachedRegisterRoomMsg
-                            if (regMsg) {
-                                const roomId =
-                                    regMsg.roomID || regMsg.roomNumber
-                                this.p2pClient?.sendTo(
-                                    peerIdCapture,
-                                    "06BJ" +
-                                    JSON.stringify({
-                                        tag: "Connected",
-                                        contents: {
-                                            hostId: roomId.toString(),
-                                            region: getJDNRegion(this.url)
-                                                .regionCode,
-                                        },
-                                    }),
-                                )
-                            }
-                        },
-                        (delay += 100),
-                    )
-
-                    this.initializingPeers.add(peerId)
-
-                    // 4. Replay Game State
-                    setTimeout(() => {
-                        const replayMsgs = this.gameState.getReplayMessages()
-                        console.log(
-                            `[ODP] Replaying ${replayMsgs.length} state messages to ${peerId}`,
-                        )
-
-                        // Track late joiners who need to wait for song to end
-                        if (this.gameState.isMidSong) {
-                            console.log(
-                                `[ODP] Peer ${peerId} joined mid-song, will wait for song to end`,
-                            )
-                            this.peersWaitingForSong.add(peerId)
-                        }
-
-                        let replayDelay = 0
-                        replayMsgs.forEach((msg) => {
-                            setTimeout(
-                                () => {
-                                    this.p2pClient?.sendTo(peerIdCapture, msg)
-                                },
-                                (replayDelay += 200),
-                            )
-                        })
-
-                        setTimeout(() => {
-                            console.log(
-                                "[ODP] Peer Initialization Complete: " + peerId,
-                            )
-                            this.initializingPeers.delete(peerId)
-                        }, replayDelay + 1000)
-                    }, delay + 400) // Wait for handshake to settle
-                }
+            // @ts-ignore - accessing JDN game global
+            globalThis.jd.popUp.build({
+                title: "VPN Required",
+                content: `The host is connected to the Just Dance server in ${hostRegionName} while you are connected to the Just Dance Server in ${localRegionName}. To be able to join the Dance Room with your phone, you will need to use a VPN app with a VPN server close to the server of the host. Otherwise, you will get an error message that says that the dance room does not exist.`,
+                isError: false,
             })
         }
     }
 
-    private handleP2PData(data: unknown, _peerId: string) {
-        // console.log("[ODP] P2P Received:", data); // Verbose
+    private handleSongStartMessage(odpMsg: SongStart): void {
+        let adjustedTime = odpMsg.startTime
+        if (this.orchestrator) {
+            adjustedTime += this.orchestrator.clockOffset
+            console.log(
+                `[ODP] Sync: Adjusting Host Time ${odpMsg.startTime} by ${this.orchestrator.clockOffset}ms -> ${adjustedTime}`,
+            )
+        }
+        songStartSync(adjustedTime)
+    }
+
+    private handleServerMessage(odpMsg: ServerMsg): void {
+        // @ts-ignore - accessing JDN game global
+        if (globalThis.jd && globalThis.jd.popUp) {
+            // @ts-ignore - accessing JDN game global
+            globalThis.jd.popUp.build({
+                title: odpMsg.title,
+                content: odpMsg.content,
+                isError: odpMsg.isError,
+                timer: odpMsg.timer,
+                hideCancelation: odpMsg.hideCancellation,
+            })
+        }
+    }
+
+    private handleHostMessage(msg: JDNMessage): void {
+        // Initialize P2P on room connection
+        if (
+            (msg.func === "connect" && msg.roomNumber) ||
+            (msg.func === "registerRoom" && msg.roomID)
+        ) {
+            const roomId = msg.roomNumber || msg.roomID
+            console.log("[ODP] Host connected to Room: " + roomId)
+            this.orchestrator?.initialize(true, roomId.toString())
+        } else if (msg.roomNumber && !this.orchestrator?.isInitialized) {
+            // Fallback
+            console.log(
+                "[ODP] Found roomNumber in msg (" +
+                msg.func +
+                "): " +
+                msg.roomNumber,
+            )
+            this.orchestrator?.initialize(true, msg.roomNumber.toString())
+        }
+
+        // Track state and broadcast
+        this.orchestrator?.handleMessage(msg)
+        this.orchestrator?.broadcastMessage(msg)
+    }
+
+    private handleP2PData(data: unknown, _peerId: string): void {
         const dataStr = wsObjectToString(data)
         const event = new MessageEvent("message", {
             data: dataStr,
@@ -461,47 +324,10 @@ export class OdpWebSocket extends WebSocket {
         })
 
         if (this.gameOnMessage) {
-            // @ts-ignore
+            // @ts-ignore - calling handler
             this.gameOnMessage(event)
         } else {
             console.warn("[ODP] NO MESSAGE HANDLER FOUND!")
-        }
-    }
-
-    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-        if (typeof data === "string") {
-            const msg = wsStringToObject(data) as JDNMessage
-            let isHost = false
-            let isFollower = false
-            if (this.cachedTag) {
-                isHost = this.cachedTag.tag === ODPClient.HostTag
-                isFollower = this.cachedTag.tag === ODPClient.FollowerTag
-            }
-
-            if (isHost && msg) {
-                if (JDNProtocol.extractFunctionString(data) === "songStart") {
-                    console.log("[ODP] Host Starting Song -> Broadcast P2P")
-                    this.gameState.handleMessage(msg) // Track start in state manager
-                    if (this.p2pClient) {
-                        this.p2pClient.broadcast(msg)
-                    }
-                }
-            } else if (isFollower) {
-                const func = JDNProtocol.extractFunctionString(data)
-                if (func === "ping") {
-                    this.handleP2PData({ func: "pong" }, "internal-auto-pong")
-                }
-                return
-            }
-        }
-
-        let shouldConnect = true
-        if (this.cachedTag && this.cachedTag.tag === ODPClient.FollowerTag) {
-            shouldConnect = false
-        }
-
-        if (shouldConnect) {
-            return super.send(data)
         }
     }
 }

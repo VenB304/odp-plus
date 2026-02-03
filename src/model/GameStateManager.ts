@@ -37,9 +37,10 @@ export class GameStateManager {
         if (msg.func === "playerJoined") {
             this.players.push(msg)
         } else if (msg.func === "playerLeft") {
-            this.players = this.players.filter(
-                (p: JDNMessage) => p.newPlayer.id !== msg.playerID,
-            )
+            this.players = this.players.filter((p: JDNMessage) => {
+                const playerId = p.newPlayer?.id
+                return playerId !== undefined && playerId !== msg.playerID
+            })
         }
 
         // Track Song State

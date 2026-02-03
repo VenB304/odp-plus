@@ -1,6 +1,7 @@
 // we need to add .js when using imports: https://github.com/microsoft/TypeScript/issues/16577
 import { Follower, Host, ODPClient } from "./model/ODPClient.js"
 import * as storage from "./storage.js"
+import { isValidRoomId } from "./validation.js"
 
 async function reload(): Promise<void> {
     await browser.tabs.reload()
@@ -59,9 +60,12 @@ function registerHandlers() {
             await new Promise((resolve) => setTimeout(resolve, 1500))
         } else if (radioValue == radioFollower) {
             const code = followCodeField.value.trim()
-            if (!code) {
-                // Simple validation
+            if (!code || !isValidRoomId(code)) {
                 followCodeField.placeholder = "REQUIRED!"
+                statusMessage.textContent = code
+                    ? "Room ID must be alphanumeric (1-20 chars)"
+                    : "Please enter a Room ID"
+                statusMessage.classList.remove("hidden")
                 return
             }
             await storage.setODPClient(new ODPClient(new Follower(code)))

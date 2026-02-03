@@ -1,4 +1,5 @@
 import { Peer, DataConnection } from "peerjs"
+import { isJDNMessage, isP2PControlMessage } from "./validation"
 
 export type P2POptions = {
     isHost: boolean
@@ -6,10 +7,11 @@ export type P2POptions = {
     onData?: (data: unknown, peerId: string) => void
 }
 
+// Internal P2P control message type guard (for ping/pong)
 function isP2PMessage(
     data: unknown,
 ): data is { __type: string; t1: number; serverTime: number } {
-    return typeof data === "object" && data !== null && "__type" in data
+    return isP2PControlMessage(data)
 }
 
 export class P2PClient {
@@ -27,8 +29,6 @@ export class P2PClient {
     public async syncClock() {
         if (this.options.isHost) return
         const hostId = this.getPeerId()
-        console.log("[P2P] Starting Clock Sync...")
-
         console.log("[P2P] Starting Clock Sync...")
 
         const t1 = Date.now()
@@ -162,6 +162,20 @@ export class P2PClient {
                 this.clockOffset = t4 - (serverTime + rtt / 2)
                 console.log(
                     `[P2P] Sync Complete. RTT: ${rtt}ms, Clock Delta: ${this.clockOffset}ms`,
+                )
+                return
+            }
+
+            // Validate incoming data before dispatching
+            // Accept: P2P control messages, JDN messages, or strings (ODP protocol)
+            if (
+                !isP2PMessage(data) &&
+                !isJDNMessage(data) &&
+                typeof data !== "string"
+            ) {
+                console.warn(
+                    "[P2P] Received invalid data type, ignoring:",
+                    typeof data,
                 )
                 return
             }

@@ -1,22 +1,13 @@
 import * as storage from "./storage"
-import { InjectData, RedirectData } from "./model/inject-data"
-import { ODPClient } from "./model/ODPClient"
-
-const defaultServer = "onlinedance.party"
-
-async function getRedirectData(
-    odpClient: ODPClient,
-): Promise<RedirectData | null> {
-    return null // P2P mode does not use a relay server redirect
-}
+import { InjectData } from "./model/inject-data"
 
 async function main(): Promise<void> {
     const odpClient = await storage.getODPClient()
     console.log("ODP: odpClient from storage: ", odpClient)
 
-    const redirectData = odpClient ? await getRedirectData(odpClient) : null
+    // P2P mode does not use relay server redirect
     const injectData = new InjectData(
-        redirectData,
+        null,
         odpClient ? JSON.stringify(odpClient) : null,
     )
 

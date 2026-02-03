@@ -8,10 +8,13 @@ export function wsObjectToString(o: unknown): string {
     return prefix + string
 }
 
-export function extractFunctionString(m: string) {
-    const start = '000f{"func":"'.length
-    const end = m.indexOf('"', start)
-    return m.substring(start, end)
+export function extractFunctionString(m: string): string {
+    try {
+        const obj = wsStringToObject(m) as { func?: string }
+        return obj?.func ?? ""
+    } catch {
+        return ""
+    }
 }
 
 export function isSyncMessage(m: string) {
