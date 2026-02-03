@@ -109,6 +109,7 @@ export class OdpWebSocket extends WebSocket {
     private cachedRegisterRoomMsg: JDNMessage | null = null
 
     private initializingPeers = new Set<string>()
+    private peersWaitingForSong = new Set<string>() // Late joiners waiting for song to end
 
     // Store the game's handler
     private gameOnMessage:
@@ -240,13 +241,35 @@ export class OdpWebSocket extends WebSocket {
                 // Game State Tracking
                 this.gameState.handleMessage(msg)
 
-                // Broadcast ALL messages to Followers
+                // Clear waiting peers when song ends
+                if (
+                    msg.func === "songEnd" ||
+                    msg.func === "returnToLobby"
+                ) {
+                    this.peersWaitingForSong.clear()
+                }
+
+                // Gameplay messages that require the follower to be in-game
+                const gameplayFuncs = [
+                    "playerFeedBack",
+                    "playerScore",
+                    "playerMoves",
+                ]
+                const isGameplayMsg = gameplayFuncs.includes(msg.func)
+
+                // Broadcast messages to Followers
                 if (this.p2pClient) {
                     const allPeers = this.p2pClient.getPeerIds()
                     allPeers.forEach((peerId) => {
-                        if (!this.initializingPeers.has(peerId)) {
-                            this.p2pClient?.sendTo(peerId, msg)
-                        }
+                        // Skip if still initializing
+                        if (this.initializingPeers.has(peerId)) return
+                        // Skip gameplay messages for late joiners
+                        if (
+                            isGameplayMsg &&
+                            this.peersWaitingForSong.has(peerId)
+                        )
+                            return
+                        this.p2pClient?.sendTo(peerId, msg)
                     })
                 }
             }
@@ -398,6 +421,14 @@ export class OdpWebSocket extends WebSocket {
                         console.log(
                             `[ODP] Replaying ${replayMsgs.length} state messages to ${peerId}`,
                         )
+
+                        // Track late joiners who need to wait for song to end
+                        if (this.gameState.isMidSong) {
+                            console.log(
+                                `[ODP] Peer ${peerId} joined mid-song, will wait for song to end`,
+                            )
+                            this.peersWaitingForSong.add(peerId)
+                        }
 
                         let replayDelay = 0
                         replayMsgs.forEach((msg) => {

@@ -148,6 +148,7 @@ This means:
 | **Video out of sync** | Poor Host connection | Host should use a wired connection and close bandwidth-heavy apps |
 | **Can't connect to Host** | NAT/Firewall blocking WebRTC | Try a mobile hotspot, disable VPN if blocking WebRTC, or ask network admin to allow UDP traffic |
 | **Connection drops** | PeerJS signaling issue | Refresh both Host and Follower pages, wait a few minutes and retry |
+| **Late joiner stuck in lobby** | Joined mid-song | This is expected behavior. Late joiners wait until the current song ends before syncing. |
 
 ---
 

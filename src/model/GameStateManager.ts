@@ -26,6 +26,11 @@ export class GameStateManager {
     }
 
     private players: JDNMessage[] = []
+    private _isMidSong = false
+
+    public get isMidSong(): boolean {
+        return this._isMidSong
+    }
 
     public handleMessage(msg: JDNMessage) {
         // Track Players
@@ -52,7 +57,9 @@ export class GameStateManager {
             this.state.launched = msg
         } else if (msg.func === "songStart") {
             this.state.start = msg
+            this._isMidSong = true
         } else if (msg.func === "songEnd" || msg.func === "returnToLobby") {
+            this._isMidSong = false
             this.resetSongState()
         }
     }
@@ -67,14 +74,21 @@ export class GameStateManager {
         if (this.state.tabRest) replay.push(this.state.tabRest)
         if (this.state.navRest) replay.push(this.state.navRest)
 
-        // 3. Song Selection
-        if (this.state.selected) replay.push(this.state.selected)
-        if (this.state.coachSelected) replay.push(this.state.coachSelected)
-        if (this.state.neverDanceAlone) replay.push(this.state.neverDanceAlone)
+        // 3. Song Selection - SKIP if mid-song to prevent UI crashes on late join
+        if (!this.isMidSong) {
+            if (this.state.selected) replay.push(this.state.selected)
+            if (this.state.coachSelected) replay.push(this.state.coachSelected)
+            if (this.state.neverDanceAlone)
+                replay.push(this.state.neverDanceAlone)
 
-        // 4. Launch & Start
-        if (this.state.launched) replay.push(this.state.launched)
-        if (this.state.start) replay.push(this.state.start)
+            // 4. Launch & Start
+            if (this.state.launched) replay.push(this.state.launched)
+            if (this.state.start) replay.push(this.state.start)
+        } else {
+            console.log(
+                "[ODP] Skipping song state replay - song is currently playing",
+            )
+        }
 
         return replay
     }
