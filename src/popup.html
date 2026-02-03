@@ -1,94 +1,70 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="css/odp.css" />
-    </head>
 
-    <body>
-        <header>
-            <h1>Online Dance Party Plus</h1>
-        </header>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="css/odp.css" />
+</head>
 
-        <main>
-            <form id="form">
-                <!-- Mode Selection -->
-                <div class="odp-box">
-                    <label class="odp-card">
-                        <input
-                            type="radio"
-                            name="setting"
-                            value="Host"
-                            id="host"
-                        />
-                        <div class="card-content">
-                            <strong>Host a Party</strong>
-                            <small
-                                >Start a JDN room. Your Room ID is the
-                                Code.</small
-                            >
-                        </div>
-                    </label>
+<body>
+    <header>
+        <h1>Online Dance Party Plus</h1>
+    </header>
 
-                    <label class="odp-card">
-                        <input
-                            type="radio"
-                            name="setting"
-                            value="Follower"
-                            id="follower"
-                        />
-                        <div class="card-content">
-                            <strong>Join a Party</strong>
-                            <small>Enter the Host's Room ID below.</small>
-                        </div>
-                    </label>
+    <main>
+        <form id="form">
+            <!-- Mode Selection -->
+            <div class="odp-box">
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Host" id="host" />
+                    <div class="card-content">
+                        <strong>Host a Party</strong>
+                        <small>Start a JDN room. Your Room ID is the
+                            Code.</small>
+                    </div>
+                </label>
 
-                    <label class="odp-card">
-                        <input
-                            type="radio"
-                            name="setting"
-                            value="Disabled"
-                            id="disabled"
-                        />
-                        <div class="card-content">
-                            <strong>Disable</strong>
-                            <small>Turn off ODP+ features.</small>
-                        </div>
-                    </label>
-                </div>
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Follower" id="follower" />
+                    <div class="card-content">
+                        <strong>Join a Party</strong>
+                        <small>Enter the Host's Room ID below.</small>
+                    </div>
+                </label>
 
-                <!-- Input Section -->
-                <div id="follower-input-section" class="odp-input-group hidden">
-                    <label for="follow-code">Room ID:</label>
-                    <input
-                        type="text"
-                        id="follow-code"
-                        name="follow-code"
-                        placeholder="e.g. 1999"
-                        class="odp-ri"
-                        disabled
-                    />
-                </div>
-
-                <div class="actions">
-                    <button type="submit" id="apply" class="primary-btn">
-                        Apply
-                    </button>
-                </div>
-            </form>
-
-            <div class="footer">
-                <a href="https://github.com/VenB304/odp-plus" target="_blank"
-                    >Online Dance Party Plus</a
-                >
+                <label class="odp-card">
+                    <input type="radio" name="setting" value="Disabled" id="disabled" />
+                    <div class="card-content">
+                        <strong>Disable</strong>
+                        <small>Turn off ODP+ features.</small>
+                    </div>
+                </label>
             </div>
-        </main>
 
-        <script
-            type="application/javascript"
-            src="js/deps/browser-polyfill.js"
-        ></script>
-        <script type="module" src="js/popup.js"></script>
-    </body>
+            <!-- Input Section -->
+            <div id="follower-input-section" class="odp-input-group hidden">
+                <label for="follow-code">Room ID:</label>
+                <input type="text" id="follow-code" name="follow-code" placeholder="e.g. 1999" class="odp-ri"
+                    disabled />
+            </div>
+
+            <div class="actions">
+                <button type="submit" id="apply" class="primary-btn">
+                    Apply
+                </button>
+            </div>
+
+            <div id="status-message" class="status-message hidden"></div>
+        </form>
+
+        <div class="footer">
+            <a href="https://github.com/VenB304/odp-plus" target="_blank">Online Dance Party Plus</a>
+        </div>
+    </main>
+
+    <script type="application/javascript" src="js/deps/browser-polyfill.js"></script>
+    <script type="module" src="js/popup.js"></script>
+</body>
+
 </html>

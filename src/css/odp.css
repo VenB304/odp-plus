@@ -242,3 +242,14 @@ input {
 .hidden {
     display: none;
 }
+
+.status-message {
+    margin-top: 1rem;
+    padding: 0.8rem;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.9rem;
+    background-color: color-mix(in srgb, var(--accent) 15%, var(--card-bg));
+    border: 1px solid var(--accent);
+    color: var(--text);
+}

@@ -42,11 +42,21 @@ function registerHandlers() {
         await storage.removeServer() // Ensure no legacy server config
 
         const radioValue = radio.value
+        const statusMessage = document.getElementById(
+            "status-message",
+        ) as HTMLDivElement
+
         if (radioValue === "" || radioValue === radioDisabled) {
             await storage.removeODPClient()
         } else if (radioValue == radioHost) {
             // Host ID is managed automatically by PeerJS/RoomID detection
             await storage.setODPClient(new ODPClient(new Host("ODP-Host")))
+
+            // Show message to Host before reloading
+            statusMessage.textContent =
+                "Page will reload. Share your Room Code with friends to let them join!"
+            statusMessage.classList.remove("hidden")
+            await new Promise((resolve) => setTimeout(resolve, 1500))
         } else if (radioValue == radioFollower) {
             const code = followCodeField.value.trim()
             if (!code) {
