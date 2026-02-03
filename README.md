@@ -1,7 +1,7 @@
 # Online Dance Party Plus
 
 <!-- TODO: Add screenshot or GIF demo here -->
-![Demo Screenshot](doc/demo.png)
+![Demo Video](https://github.com/user-attachments/assets/57895c9e-a833-4cb4-a6fd-87a94c0c1676)
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 
