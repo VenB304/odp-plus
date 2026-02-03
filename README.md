@@ -2,7 +2,7 @@
 
 **Play Just Dance Now with friends anywhere, using a direct Peer-to-Peer connection.**
 
-ODP+ is a serverless implementation of the original Online Dance Party extension. It enables synchronization of Just Dance Now sessions between clients using a direct peer-to-peer connection.
+ODP+ is a serverless implementation of the original [Online Dance Party](https://codeberg.org/ODP) extension. It enables synchronization of Just Dance Now sessions between clients using a direct peer-to-peer connection.
 
 ## Features
 

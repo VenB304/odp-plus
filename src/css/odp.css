@@ -1,16 +1,29 @@
 /* Global variables. */
 :root,
 ::backdrop {
+    /* Set sans-serif & mono fonts */
+    --sans-font: -apple-system, BlinkMacSystemFont, "Avenir Next", Avenir,
+        "Nimbus Sans L", Roboto, "Noto Sans", "Segoe UI", Arial, Helvetica,
+        "Helvetica Neue", sans-serif;
+    --mono-font: Consolas, Menlo, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+    --standard-border-radius: 5px;
+
+    /* Theme Variables */
     --accent: #653295;
     --accent-bg: #fafafa;
     --accent-hover: #8455c0;
     --text: #333;
     --border: #ccc;
     --card-bg: #fff;
+    --bg: #fff;
+    /* Added for compatibility */
+    --disabled: #efefef;
+    --accent-text: #fff;
 }
 
 /* Dark theme */
 @media (prefers-color-scheme: dark) {
+
     :root,
     ::backdrop {
         color-scheme: dark;
@@ -20,16 +33,39 @@
         --accent-bg: #1e1e1e;
         --border: #444;
         --card-bg: #2b2b2b;
+        --bg: #1e1e1e;
+        --disabled: #111;
+        --accent-text: #eee;
     }
 }
 
+/* Reset box-sizing */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Reset default appearance */
+textarea,
+select,
+input,
+progress {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
 body {
-    width: 320px; /* Standard extension width */
+    width: 320px;
+    /* Standard extension width */
     font-size: 0.9rem;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--sans-font);
     padding: 1rem;
     color: var(--text);
     background-color: var(--accent-bg);
+    margin: 0;
+    line-height: 1.5;
 }
 
 header h1 {
@@ -108,7 +144,8 @@ header small {
     text-align: center;
     border: 1px solid var(--border);
     border-radius: 4px;
-    box-sizing: border-box; /* Fix width overflow */
+    box-sizing: border-box;
+    /* Fix width overflow */
 }
 
 .actions {
@@ -145,6 +182,7 @@ header small {
     opacity: 0.5;
     text-decoration: none;
 }
+
 .footer a:hover {
     opacity: 1;
 }

@@ -1,4 +1,5 @@
 import { wsObjectToString, wsStringToObject } from "./jdn-protocol"
+import { getJDNRegion } from "./utils"
 import * as JDNProtocol from "./jdn-protocol"
 import { sleep } from "./utils"
 import {
@@ -147,6 +148,23 @@ export class OdpWebSocket extends WebSocket {
                         })
                         p.innerText = odpMsg.hostId
                     })
+                    const localRegion = getJDNRegion(this.url)
+                    if (
+                        odpMsg.region &&
+                        localRegion.regionCode !== "unknown" &&
+                        odpMsg.region !== localRegion.regionCode
+                    ) {
+                        const hostRegionName =
+                            getJDNRegion(odpMsg.region).humanReadable
+                        const localRegionName = localRegion.humanReadable
+
+                        // @ts-ignore
+                        globalThis.jd.popUp.build({
+                            title: "VPN Required",
+                            content: `The host is connected to the Just Dance server in ${hostRegionName} while you are connected to the Just Dance Server in ${localRegionName}. To be able to join the Dance Room with your phone, you will need to use a VPN app with a VPN server close to the server of the host. Otherwise, you will get an error message that says that the dance room does not exist.`,
+                            isError: false,
+                        })
+                    }
                     return // SWALLOW MESSAGE
                 } else if (odpMsg instanceof SongStart) {
                     let adjustedTime = odpMsg.startTime
@@ -212,9 +230,9 @@ export class OdpWebSocket extends WebSocket {
                     // Fallback
                     console.log(
                         "[ODP] Found roomNumber in msg (" +
-                            msg.func +
-                            "): " +
-                            msg.roomNumber,
+                        msg.func +
+                        "): " +
+                        msg.roomNumber,
                     )
                     this.initP2P(true, msg.roomNumber.toString())
                 }
@@ -358,12 +376,14 @@ export class OdpWebSocket extends WebSocket {
                                 this.p2pClient?.sendTo(
                                     peerIdCapture,
                                     "06BJ" +
-                                        JSON.stringify({
-                                            tag: "Connected",
-                                            contents: {
-                                                hostId: roomId.toString(),
-                                            },
-                                        }),
+                                    JSON.stringify({
+                                        tag: "Connected",
+                                        contents: {
+                                            hostId: roomId.toString(),
+                                            region: getJDNRegion(this.url)
+                                                .regionCode,
+                                        },
+                                    }),
                                 )
                             }
                         },

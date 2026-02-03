@@ -1,11 +1,14 @@
 export type ODPMsg = Connected | SongStart | ServerMsg
 
 export class Connected {
-    constructor(public hostId: string) {}
+    constructor(
+        public hostId: string,
+        public region?: string,
+    ) { }
 }
 
 export class SongStart {
-    constructor(public startTime: number) {}
+    constructor(public startTime: number) { }
 }
 
 export class ServerMsg {
@@ -15,11 +18,11 @@ export class ServerMsg {
         public isError: boolean | undefined,
         public timer: number | undefined,
         public hideCancellation: boolean | undefined,
-    ) {}
+    ) { }
 }
 
 export class UnknownMsg {
-    constructor(public error: string) {}
+    constructor(public error: string) { }
 }
 
 export function parseODPMsg(m: string): ODPMsg | UnknownMsg | null {
@@ -49,7 +52,7 @@ export function parseODPMsg(m: string): ODPMsg | UnknownMsg | null {
         Object.hasOwn(o.contents, "hostId") &&
         typeof o.contents.hostId === "string"
     ) {
-        return new Connected(o.contents.hostId)
+        return new Connected(o.contents.hostId, o.contents.region)
     } else if (
         o.tag === "ServerMsg" &&
         Object.hasOwn(o, "contents") &&
