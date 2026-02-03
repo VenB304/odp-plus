@@ -1,8 +1,10 @@
+
+https://github.com/user-attachments/assets/68b1428d-28a1-4b85-aa80-059125591630
 # Online Dance Party Plus
 
 ## Preview
 unmute for audio
-<video src="https://github.com/user-attachments/assets/57895c9e-a833-4cb4-a6fd-87a94c0c1676" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/f93507ca-6521-47fc-a204-4c9c1094b4cc" controls width="100%"></video>
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 
@@ -30,6 +32,10 @@ ODP+ is a serverless implementation of the original [Online Dance Party](https:/
 
 1. **Install** the extension (see [Installation](#installation))
 2. **Host**:
+
+https://github.com/user-attachments/assets/1a01c00a-4889-4c48-9bd0-9f11a91acb27
+
+
     - Open JDN
     - Start a room
     - Click ODP+ icon
