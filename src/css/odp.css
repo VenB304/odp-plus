@@ -56,6 +56,34 @@ progress {
     -moz-appearance: none;
 }
 
+/* Radio button styling */
+input[type="radio"] {
+    vertical-align: middle;
+    position: relative;
+    width: 1em;
+    height: 1em;
+    border-radius: 100%;
+    border: 1px solid var(--border);
+    background-color: var(--bg);
+}
+
+input[type="radio"]:checked {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+input[type="radio"]:checked::after {
+    content: " ";
+    width: 0.4em;
+    height: 0.4em;
+    border-radius: 100%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--accent-text);
+}
+
 body {
     width: 320px;
     /* Standard extension width */
@@ -154,9 +182,33 @@ header small {
     justify-content: center;
 }
 
+/* Base form element styling */
+textarea,
+select,
+input,
+button,
+.button {
+    font-size: inherit;
+    font-family: inherit;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--standard-border-radius);
+    box-shadow: none;
+    max-width: 100%;
+    display: inline-block;
+}
+
+textarea,
+select,
+input {
+    color: var(--text);
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+}
+
 .primary-btn {
     background-color: var(--accent);
-    color: white;
+    color: var(--accent-text);
     border: none;
     padding: 0.7rem 1.5rem;
     border-radius: 5px;

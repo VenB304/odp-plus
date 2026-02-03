@@ -5,7 +5,7 @@
     "scripts": {
         "start": "npm run build && web-ext run --source-dir dist --url https://justdancenow.com",
         "startC": "npm start -- -t chromium",
-        "build": "tsc && shx mkdir -p dist/js/bundle && esbuild dist/js/inject-redirect.js --bundle --outfile=dist/js/bundle/inject-redirect.js && esbuild dist/js/redirect.js --bundle --outfile=dist/js/bundle/redirect.js && shx mkdir -p dist/js/deps && shx cp node_modules/webextension-polyfill/dist/browser-polyfill.min.js dist/js/deps/browser-polyfill.js && shx cp src/manifest.json dist/manifest.json && shx cp -r src/css dist/css && shx rm -rf dist/img && shx cp -r img dist/img",
+        "build": "tsc && shx mkdir -p dist/js/bundle && esbuild dist/js/inject-redirect.js --bundle --outfile=dist/js/bundle/inject-redirect.js && esbuild dist/js/redirect.js --bundle --outfile=dist/js/bundle/redirect.js && shx mkdir -p dist/js/deps && shx cp node_modules/webextension-polyfill/dist/browser-polyfill.min.js dist/js/deps/browser-polyfill.js && shx cp src/manifest.json dist/manifest.json && shx cp src/popup.html dist/popup.html && shx rm -rf dist/css && shx cp -r src/css dist/css && shx rm -rf dist/img && shx mkdir -p dist/img && shx cp img/icon.png dist/img/icon.png",
         "watch": "npm run build; while inotifywait -r src; do npm run build; done",
         "lint": "eslint . --ext .js,.jsx,.ts,.tsx,.json",
         "format": "npx prettier@3.3.3 . --write",
