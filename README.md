@@ -21,7 +21,6 @@ ODP+ is a serverless implementation of the original [Online Dance Party](https:/
 - [How It Works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
-- [Contributing](#contributing)
 - [License](#license)
 - [Credits](#credits)
 
