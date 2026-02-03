@@ -4,7 +4,6 @@
 ![Demo Screenshot](doc/demo.png)
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](package.json)
 
 **Play Just Dance Now with friends anywhere, using a direct Peer-to-Peer connection.**
 
@@ -119,12 +118,13 @@ This means:
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **Page reloads repeatedly** | Ensure you have the latest version of the extension. |
-| **"Room Not Found" on phone** | You and the Host are in different regions. Use a VPN to match the Host's region. |
-| **Video out of sync** | Poor connection quality. Try having the Host use a wired connection. |
-| **Can't connect to Host** | Check firewalls/NAT. Both parties need to allow WebRTC connections. |
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| **Page reloads repeatedly** | Outdated extension | Update to the latest version |
+| **"Room Not Found" on phone** | Region mismatch | Use a VPN to match the Host's region before joining |
+| **Video out of sync** | Poor Host connection | Host should use a wired connection and close bandwidth-heavy apps |
+| **Can't connect to Host** | NAT/Firewall blocking WebRTC | Try a mobile hotspot, disable VPN if blocking WebRTC, or ask network admin to allow UDP traffic |
+| **Connection drops** | PeerJS signaling issue | Refresh both Host and Follower pages, wait a few minutes and retry |
 
 ---
 
