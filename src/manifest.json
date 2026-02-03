@@ -9,7 +9,9 @@
         "96": "img/icon.png",
         "128": "img/icon.png"
     },
-    "permissions": ["storage"],
+    "permissions": [
+        "storage"
+    ],
     "host_permissions": [
         "*://*.justdancenow.com/*",
         "*://*.justdancenowplus.ru/*"
@@ -19,8 +21,8 @@
             "matches": [
                 "https://justdancenow.com/",
                 "https://www.justdancenow.com/",
-                "https://justdancenowplus.ru/",
-                "https://www.justdancenowplus.ru/"
+                "https://justdancenowplus.ru/*",
+                "https://www.justdancenowplus.ru/*"
             ],
             "js": [
                 "js/deps/browser-polyfill.js",
@@ -30,7 +32,9 @@
     ],
     "web_accessible_resources": [
         {
-            "resources": ["js/bundle/redirect.js"],
+            "resources": [
+                "js/bundle/redirect.js"
+            ],
             "matches": [
                 "https://justdancenow.com/*",
                 "https://www.justdancenow.com/*",

@@ -54,6 +54,29 @@ ODP+ is a serverless implementation of the original [Online Dance Party](https:/
 
 ---
 
+## Supported Sites
+
+| Site | Status | Notes |
+|------|--------|-------|
+| [justdancenow.com](https://justdancenow.com) | ✅ Supported | Official JDN site |
+| [justdancenowplus.ru](https://justdancenowplus.ru) | ⚠️ Partial | See below |
+
+### JustDanceNow+ Compatibility
+
+| UI Version | Status |
+|------------|--------|
+| OurUI (2024) | ✅ Works |
+| 2024 | ✅ Works |
+| 2020 | ✅ Works |
+| Experiments | ✅ Works |
+| 2018 | ❌ Not Supported |
+| 2017 | ❌ Not Supported |
+| 2015 | ❌ Not Supported |
+
+> ⚠️ **Maintenance Notice**: This extension is provided as-is. Future updates to Just Dance Now or JustDanceNow+ may break compatibility. There is no guarantee of ongoing maintenance or updates.
+
+---
+
 ## Installation
 
 ### Chrome / Edge / Brave
