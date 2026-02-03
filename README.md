@@ -139,11 +139,36 @@ This means:
 
 ---
 
+---
+
+## Comparison with Original Extension
+
+| Feature | ODP+ (New) | Original Extension |
+| :--- | :--- | :--- |
+| **Server Requirement** | **None (P2P)** | Relay Server Required |
+| **Cost** | **$0 (Free)** | Hosting Costs for Server |
+| **Network Architecture** | **Host is Server** (Star Topology) | Centralized Server |
+| **Latency** | **Low** (Direct Connection) | Higher (Relay Hop) |
+| **Sync Accuracy** | **Smart Clock Sync** | Basic Timestamps |
+| **Resilience** | **Auto-Reconnect** | Manual Reconnect |
+
+### Performance Limits
+
+Since ODP+ relies on the **Host's upload speed**, the number of players depends on the Host's connection quality:
+
+| Scenario | Players | Host Upload Required (Est.) | Performance |
+| :--- | :--- | :--- | :--- |
+| **Small Party** | 1 - 10 | < 1 Mbps | ✨ **Perfect** |
+| **Classroom** | 10 - 50 | 2 - 8 Mbps | ✅ **Good** |
+| **Streamer** | 50 - 100 | 10 - 20 Mbps | ⚠️ **Risky** (May Lag) |
+| **Massive Event** | 200+ | > 50 Mbps | 🛑 **Not Recommended** (Browser Limits) |
+
+---
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| **Page reloads repeatedly** | Outdated extension | Update to the latest version |
 | **"Room Not Found" on phone** | Region mismatch | Use a VPN to match the Host's region before joining |
 | **Video out of sync** | Poor Host connection | Host should use a wired connection and close bandwidth-heavy apps |
 | **Can't connect to Host** | NAT/Firewall blocking WebRTC | Try a mobile hotspot, disable VPN if blocking WebRTC, or ask network admin to allow UDP traffic |
