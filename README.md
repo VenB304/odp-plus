@@ -80,20 +80,36 @@ ODP+ is a serverless implementation of the original [Online Dance Party](https:/
 
 ## Installation
 
-### Chrome / Edge / Brave
+**Note:** No pre-built release is currently available. You will need to build the extension from source.
 
-1. Download the latest release from [Releases](https://github.com/VenB304/odp-plus/releases).
-2. Unzip the folder.
-3. Go to `chrome://extensions`.
-4. Enable **Developer Mode** (top right).
-5. Click **Load unpacked** and select the `dist` folder.
+### Prerequisites
 
-### Firefox
+- [Node.js](https://nodejs.org/) (LTS version recommended)
 
-1. Download the latest release.
-2. Go to `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on**.
-4. Select the `manifest.json` file in the `dist` folder.
+### 1. Build the Extension
+
+1.  Download or clone this repository.
+2.  Open a command prompt or terminal in the project folder.
+3.  Install dependencies and build:
+    ```bash
+    npm install
+    npm run build
+    ```
+4.  This will create a `dist` folder containing the unpacked extension.
+
+### 2. Load into Browser
+
+#### Chrome / Edge / Brave
+
+1.  Go to `chrome://extensions`.
+2.  Enable **Developer Mode** (top right).
+3.  Click **Load unpacked** and select the `dist` folder you just built.
+
+#### Firefox
+
+1.  Go to `about:debugging#/runtime/this-firefox`.
+2.  Click **Load Temporary Add-on**.
+3.  Select the `manifest.json` file inside the `dist` folder.
 
 ---
 
