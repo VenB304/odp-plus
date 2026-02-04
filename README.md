@@ -1,5 +1,3 @@
-
-https://github.com/user-attachments/assets/68b1428d-28a1-4b85-aa80-059125591630
 # Online Dance Party Plus
 
 ## Preview
@@ -32,10 +30,6 @@ ODP+ is a serverless implementation of the original [Online Dance Party](https:/
 
 1. **Install** the extension (see [Installation](#installation))
 2. **Host**:
-
-https://github.com/user-attachments/assets/1a01c00a-4889-4c48-9bd0-9f11a91acb27
-
-
     - Open JDN
     - Start a room
     - Click ODP+ icon
