@@ -107,9 +107,7 @@ export class OdpWebSocket extends WebSocket {
                     this.orchestrator?.syncClock()
                 }, 2000)
             } else if (this.isHost) {
-                console.log(
-                    "[ODP] Host initializing (waiting for JDN connect)",
-                )
+                console.log("[ODP] Host initializing (waiting for JDN connect)")
             }
         }
     }
@@ -304,9 +302,9 @@ export class OdpWebSocket extends WebSocket {
             // Fallback
             console.log(
                 "[ODP] Found roomNumber in msg (" +
-                msg.func +
-                "): " +
-                msg.roomNumber,
+                    msg.func +
+                    "): " +
+                    msg.roomNumber,
             )
             this.orchestrator?.initialize(true, msg.roomNumber.toString())
         }

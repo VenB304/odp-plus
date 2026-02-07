@@ -140,57 +140,69 @@ export class P2POrchestrator {
         // 1. Clock Sync (5 pings)
         const now = Date.now()
         for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                this.p2pClient?.sendTo(peerId, {
-                    func: "sync",
-                    sync: {
-                        o: now + i * 100,
-                        r: 0,
-                        t: 0,
-                        d: 0,
-                    },
-                })
-            }, (delay += 100))
+            setTimeout(
+                () => {
+                    this.p2pClient?.sendTo(peerId, {
+                        func: "sync",
+                        sync: {
+                            o: now + i * 100,
+                            r: 0,
+                            t: 0,
+                            d: 0,
+                        },
+                    })
+                },
+                (delay += 100),
+            )
         }
 
         // 2. Sync Complete
-        setTimeout(() => {
-            this.p2pClient?.sendTo(peerId, {
-                func: "clientSyncCompleted",
-                latency: 50,
-                clockOffset: 0,
-                scoringWindowWidth: 1,
-                serverTime: Date.now(),
-            })
-        }, (delay += 100))
+        setTimeout(
+            () => {
+                this.p2pClient?.sendTo(peerId, {
+                    func: "clientSyncCompleted",
+                    latency: 50,
+                    clockOffset: 0,
+                    scoringWindowWidth: 1,
+                    serverTime: Date.now(),
+                })
+            },
+            (delay += 100),
+        )
 
         // 3. RegisterRoom
-        setTimeout(() => {
-            if (this.cachedRegisterRoomMsg) {
-                this.p2pClient?.sendTo(peerId, this.cachedRegisterRoomMsg)
-            }
-        }, (delay += 100))
+        setTimeout(
+            () => {
+                if (this.cachedRegisterRoomMsg) {
+                    this.p2pClient?.sendTo(peerId, this.cachedRegisterRoomMsg)
+                }
+            },
+            (delay += 100),
+        )
 
         // 4. Connected (ODP message)
-        setTimeout(() => {
-            if (this.cachedRegisterRoomMsg) {
-                const roomId =
-                    this.cachedRegisterRoomMsg.roomID ||
-                    this.cachedRegisterRoomMsg.roomNumber
-                const wsUrl = this.config.getWebSocketUrl()
-                this.p2pClient?.sendTo(
-                    peerId,
-                    "06BJ" +
-                    JSON.stringify({
-                        tag: "Connected",
-                        contents: {
-                            hostId: roomId.toString(),
-                            region: getJDNRegion(wsUrl).regionCode,
-                        },
-                    }),
-                )
-            }
-        }, (delay += 100))
+        setTimeout(
+            () => {
+                if (this.cachedRegisterRoomMsg) {
+                    const roomId =
+                        this.cachedRegisterRoomMsg.roomID ||
+                        this.cachedRegisterRoomMsg.roomNumber
+                    const wsUrl = this.config.getWebSocketUrl()
+                    this.p2pClient?.sendTo(
+                        peerId,
+                        "06BJ" +
+                            JSON.stringify({
+                                tag: "Connected",
+                                contents: {
+                                    hostId: roomId.toString(),
+                                    region: getJDNRegion(wsUrl).regionCode,
+                                },
+                            }),
+                    )
+                }
+            },
+            (delay += 100),
+        )
 
         // 5. Replay Game State
         setTimeout(() => {
@@ -209,9 +221,12 @@ export class P2POrchestrator {
 
             let replayDelay = 0
             for (const msg of replayMsgs) {
-                setTimeout(() => {
-                    this.p2pClient?.sendTo(peerId, msg)
-                }, (replayDelay += 200))
+                setTimeout(
+                    () => {
+                        this.p2pClient?.sendTo(peerId, msg)
+                    },
+                    (replayDelay += 200),
+                )
             }
 
             // Mark initialization complete

@@ -206,7 +206,7 @@ export class P2PClient {
     public broadcast(data: unknown) {
         if (this.connections.size === 0) return
 
-        for (const [_peerId, conn] of this.connections) {
+        for (const conn of this.connections.values()) {
             if (conn.open) {
                 conn.send(data)
             }

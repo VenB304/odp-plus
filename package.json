@@ -9,7 +9,7 @@
         "watch": "npm run build; while inotifywait -r src; do npm run build; done",
         "lint": "eslint . --ext .js,.jsx,.ts,.tsx,.json",
         "format": "npx prettier@3.3.3 . --write",
-        "check": "npm run build && npm run lint && bash format-check.sh && tsc && echo 'No errors'",
+        "check": "npm run build && npm run lint && npx prettier@3.3.3 --check . && tsc && echo 'No errors'",
         "clean": "shx rm -rf dist/js",
         "release": "npm run clean && npm run build && shx mkdir -p ../ODP_Release/ && cd dist && zip -r \"../../ODP_Release/odp-plus-v2.0\".zip ."
     },
