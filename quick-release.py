@@ -224,9 +224,9 @@ def get_copilot_commit_message(diff, files, max_diff_size=5000):
     
     file_summary_text = "\n".join(file_summary)
     
-    prompt = f"""Write a git commit message following Conventional Commits specification.
+    prompt = f"""Write a git commit message for ODP+ following Conventional Commits specification.
 
-PROJECT COMMIT GUIDELINES:
+GUIDELINES FROM copilot-instructions.md:
 {instructions}
 
 FILES CHANGED ({len(files)} files):
@@ -237,17 +237,16 @@ GIT DIFF:
 
 REQUIREMENTS:
 1. Header: <type>: <summary> (under 72 chars)
-2. Body: Detailed explanation of WHAT changed and WHY
-3. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-4. Be specific about components/files modified
-5. Explain the purpose, benefits, and technical details
-6. Use bullet points in body for clarity
+2. Body: Detailed explanation of WHAT changed and WHY.
+3. Use bullet points in body for clarity.
+4. BE DESCRIPTIVE: Do NOT just copy the header into the body.
+5. TECHNICAL DETAILS: Explain technical changes, not just "updated files".
+6. RELEASE NOTES STYLE: Write the body as if it were for a GitHub Release description.
 
 IMPORTANT:
 - Output ONLY the commit message (no markdown fences, no explanations)
 - First line is header, blank line, then body
-- Be technical and specific, not generic
-- If breaking changes, add 'BREAKING CHANGE:' section
+- If breaking changes, include 'BREAKING CHANGE:' section
 """
     
     try:
@@ -347,12 +346,13 @@ def wait_for_release(branch, max_wait_time, dry_run=False):
     start_time = time.time()
     last_commit_hash = run_command("git rev-parse HEAD").stdout.strip()
     
-    poll_interval = 3
+    poll_interval = 5
     
     while (time.time() - start_time) < max_wait_time:
         time.sleep(poll_interval)
         
-        # Fetch
+        # Fetch tags specifically to ensure latest version is visible
+        run_command("git fetch --tags origin")
         run_command(f"git fetch origin {branch}")
         
         remote_commit = run_command(f"git rev-parse origin/{branch}").stdout.strip()
@@ -370,7 +370,9 @@ def wait_for_release(branch, max_wait_time, dry_run=False):
                 res = run_command(f"git pull --rebase origin {branch}")
                 
                 if res.returncode == 0:
-                    tag = run_command("git describe --tags --abbrev=0").stdout.strip()
+                    # Get the absolute newest tag by date
+                    tag_res = run_command("git describe --tags $(git rev-list --tags --max-count=1)")
+                    tag = tag_res.stdout.strip()
                     print_color(f"[OK] Release commit pulled. New version: {tag}", "GREEN")
                     return
                 else:
