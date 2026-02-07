@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/VenB304/odp-plus/compare/v1.1.0...v1.2.0) (2026-02-07)
+
+
+### Features
+
+* add quick-release.bak.ps1 and quick-release.py scripts ([f4b3204](https://github.com/VenB304/odp-plus/commit/f4b3204b1c31497681068dd1e0fa1e05ce427cff))
+
 # [1.1.0](https://github.com/VenB304/odp-plus/compare/v1.0.5...v1.1.0) (2026-02-07)
 
 
