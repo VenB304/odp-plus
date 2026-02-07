@@ -1,5 +1,5 @@
-# Fully Automatic Release Script
-# Stages, auto-generates detailed Conventional Commit message using Copilot CLI, commits, and pushes
+# Fully Automatic Release Script with GitHub Copilot CLI
+# Stages, auto-generates detailed Conventional Commit message using GitHub Copilot CLI, commits, and pushes
 # Usage: .\quick-release.ps1
 # Or with custom message: .\quick-release.ps1 -CustomMessage "add new sync feature"
 # Or skip formatting: .\quick-release.ps1 -SkipFormat
@@ -16,14 +16,14 @@ param(
     [Parameter(HelpMessage = "Preview changes without committing/pushing")]
     [switch]$DryRun,
     
-    [Parameter(HelpMessage = "Maximum diff size for Copilot (default: 3500)")]
-    [int]$MaxDiffSize = 3500
+    [Parameter(HelpMessage = "Maximum diff size for Copilot (default: 5000)")]
+    [int]$MaxDiffSize = 5000
 )
 
 $ErrorActionPreference = "Stop"
 
 # ============================================================================
-# Helper Functions
+# Helper Functions  
 # ============================================================================
 
 function Write-Step {
@@ -53,23 +53,25 @@ function Test-GitRepository {
     }
 }
 
-function Test-GitClean {
-    # Check for uncommitted changes before we start
-    $status = git status --porcelain
-    return [string]::IsNullOrEmpty($status)
-}
-
 function Get-CurrentBranch {
     return git rev-parse --abbrev-ref HEAD
 }
 
-function Test-CopilotCLI {
-    if (-not (Get-Command copilot -ErrorAction SilentlyContinue)) {
-        Write-Error "'copilot' CLI not found in PATH."
-        Write-Host "Install it with: npm install -g @githubnext/github-copilot-cli" -ForegroundColor Yellow
+function Test-GitHubCopilotCLI {
+    # Check if the new GitHub Copilot CLI is installed (@github/copilot)
+    try {
+        $copilotVersion = & copilot --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "GitHub Copilot CLI detected: $copilotVersion" -ForegroundColor DarkGray
+            return $true
+        }
+    } catch {
+        Write-Host "GitHub Copilot CLI not found" -ForegroundColor Yellow
+        Write-Host "Install with: npm install -g @github/copilot" -ForegroundColor Yellow
+        Write-Host "Then authenticate with: copilot auth" -ForegroundColor Yellow
         return $false
     }
-    return $true
+    return $false
 }
 
 function Invoke-SafePull {
@@ -169,14 +171,16 @@ function Get-ConventionalCommitType {
     param([string[]]$Files)
     
     # Heuristics for commit type
-    $hasCode = $Files -match '\.(ts|js|jsx|tsx|py|java|cs|go|rs)$'
-    $hasDocs = $Files -match '\.(md|txt|rst)$'
+    $hasCode = $Files -match '\.(ts|js|jsx|tsx|py|java|cs|go|rs|c|cpp)$'
+    $hasDocs = $Files -match '\.(md|txt|rst|adoc)$'
     $hasConfig = $Files -match '\.(json|yaml|yml|toml|ini|config)$'
     $hasTests = $Files -match '\.(test|spec)\.(ts|js|jsx|tsx|py)$'
     $hasStyles = $Files -match '\.(css|scss|sass|less)$'
+    $hasBuild = $Files -match 'package\.json|package-lock\.json'
     
     if ($hasTests) { return "test" }
     if ($hasDocs -and -not $hasCode) { return "docs" }
+    if ($hasBuild -and -not $hasCode) { return "build" }
     if ($hasConfig -and -not $hasCode) { return "chore" }
     if ($hasStyles -and -not $hasCode) { return "style" }
     if ($hasCode) { return "feat" }
@@ -184,90 +188,174 @@ function Get-ConventionalCommitType {
     return "chore"
 }
 
-function Get-CopilotCommitMessage {
+function Get-GitHubCopilotCommitMessage {
     param(
         [string]$Diff,
         [string[]]$StagedFiles
     )
     
-    Write-Step "Generating commit message with Copilot..."
+    Write-Step "Generating commit message with GitHub Copilot CLI..."
     
     # Truncate diff if too large
     if ($Diff.Length -gt $MaxDiffSize) {
-        $Diff = $Diff.Substring(0, $MaxDiffSize) + "`n...(truncated for length)"
+        $Diff = $Diff.Substring(0, $MaxDiffSize)
         Write-Host "Diff truncated to $MaxDiffSize characters" -ForegroundColor DarkGray
     }
     
-    # Read instructions if available
+    # Read copilot-instructions.md if available
     $instructions = ""
     if (Test-Path "copilot-instructions.md") {
         $instructions = Get-Content "copilot-instructions.md" -Raw
+        Write-Host "Using copilot-instructions.md for context" -ForegroundColor DarkGray
     }
     
     # Build file summary
-    $fileSummary = "Files changed: $($StagedFiles.Count)`n" + ($StagedFiles -join "`n")
+    $fileSummary = ($StagedFiles | ForEach-Object { "- $_" }) -join "`n"
     
-    # Construct prompt
+    # Construct detailed prompt following your copilot-instructions.md
     $prompt = @"
-Context: $instructions
+Write a git commit message following Conventional Commits specification.
 
-Files Modified:
+PROJECT COMMIT GUIDELINES:
+$instructions
+
+FILES CHANGED ($($StagedFiles.Count) files):
 $fileSummary
 
-Diff:
+GIT DIFF:
 $Diff
 
-Task: Generate a single detailed Conventional Commit message for these changes.
+Generate a commit message with:
+1. Header: <type>: <summary> (under 72 chars)
+2. Body: Detailed explanation of what and why
+3. Use types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+4. Be specific about components/files changed
+5. Explain the purpose and benefits
 
-Requirements:
-1. MUST start with a semantic prefix (feat:, fix:, docs:, chore:, refactor:, test:, style:, perf:, ci:, build:)
-2. Header line format: "type(scope): brief summary" or "type: brief summary"
-3. Include a body with bullet points explaining key changes
-4. Keep header under 72 characters
-5. Output ONLY the raw commit message (no markdown fences, no explanations)
+Output ONLY the commit message (no markdown fences, no explanations).
 "@
-    
+
     try {
-        # Call Copilot CLI
-        $copilotOutput = & copilot -p $prompt 2>&1
+        Write-Host "Calling GitHub Copilot CLI..." -ForegroundColor DarkGray
         
-        # Process output
-        $rawString = $copilotOutput -join "`n"
+        # Simple approach: Write prompt to temp file, pipe it to copilot via stdin
+        $promptFile = [System.IO.Path]::GetTempFileName()
+        $outputFile = [System.IO.Path]::GetTempFileName()
         
-        # Clean up the response
-        $cleaned = $rawString `
-            -replace '(?s)(Total usage est:|Breakdown by AI model:).*$', '' `
-            -replace '(?i)^(Here is|Sure|Noted|Okay|Here.s).*?:', '' `
-            -replace '^```[^\n]*\n', '' `
-            -replace '\n```$', '' `
-            -replace '```', ''
-        
-        $commitMessage = $cleaned.Trim().Trim('"').Trim("'")
-        
-        # Validate we got something useful
-        if ([string]::IsNullOrWhiteSpace($commitMessage)) {
-            throw "Empty response from Copilot"
+        try {
+            # Write the prompt to file
+            Set-Content -Path $promptFile -Value $prompt -Encoding UTF8
+            
+            # Use copilot in a simpler way - just pipe the file content
+            # The -p flag might be the issue, let's try interactive mode with input redirect
+            Write-Host "Executing: Get-Content prompt | copilot --silent --allow-all-tools" -ForegroundColor DarkGray
+            
+            # Method: Use PowerShell pipeline which handles this cleanly
+            $copilotOutput = Get-Content $promptFile -Raw | & copilot --silent --allow-all-tools 2>&1
+            
+            # Alternative: If that doesn't work, save to output file using redirection
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($copilotOutput -join ""))) {
+                Write-Host "Trying alternative invocation method..." -ForegroundColor DarkGray
+                
+                # Create a batch script to handle the execution
+                $batchFile = [System.IO.Path]::GetTempFileName() + ".bat"
+                $batchContent = @"
+@echo off
+copilot -p "@$promptFile" --silent --allow-all-tools > "$outputFile" 2>&1
+"@
+                Set-Content -Path $batchFile -Value $batchContent -Encoding ASCII
+                
+                # Execute the batch file
+                $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$batchFile`"" -Wait -PassThru -NoNewWindow
+                
+                if ($process.ExitCode -eq 0 -and (Test-Path $outputFile)) {
+                    $copilotOutput = Get-Content $outputFile -Raw
+                } else {
+                    throw "Batch invocation failed with exit code $($process.ExitCode)"
+                }
+                
+                Remove-Item $batchFile -Force -ErrorAction SilentlyContinue
+            }
+            
+            # Process output
+            $rawString = if ($copilotOutput -is [array]) { $copilotOutput -join "`n" } else { $copilotOutput }
+            
+            Write-Host "Copilot response received (length: $($rawString.Length) chars)" -ForegroundColor DarkGray
+            
+            # Clean up the response
+            $cleaned = $rawString `
+                -replace '^```[^\n]*\n', '' `
+                -replace '\n```$', '' `
+                -replace '```', ''
+            
+            $commitMessage = $cleaned.Trim()
+            
+            # Validate we got something useful
+            if ([string]::IsNullOrWhiteSpace($commitMessage) -or $commitMessage.Length -lt 15) {
+                throw "Invalid or empty Copilot response. Output: '$commitMessage'"
+            }
+            
+            # Check if it follows conventional commit format
+            $firstLine = ($commitMessage -split "`n")[0]
+            if ($commitMessage -notmatch '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+?\))?:\s') {
+                Write-Host "Warning: Response may not follow Conventional Commit format" -ForegroundColor Yellow
+                Write-Host "First line: $firstLine" -ForegroundColor DarkGray
+            }
+            
+            Write-Success "[OK] Commit message generated by GitHub Copilot"
+            return $commitMessage
+            
+        } finally {
+            # Clean up temp files
+            Remove-Item $promptFile -Force -ErrorAction SilentlyContinue
+            Remove-Item $outputFile -Force -ErrorAction SilentlyContinue
         }
-        
-        # Check if it looks like a conventional commit
-        if ($commitMessage -notmatch '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+?\))?:') {
-            Write-Host "Warning: Generated message may not follow Conventional Commit format" -ForegroundColor Yellow
-        }
-        
-        Write-Success "[OK] Commit message generated"
-        return $commitMessage
         
     } catch {
-        Write-Host "Copilot generation failed: $_" -ForegroundColor Red
-        Write-Host "Falling back to heuristic generation..." -ForegroundColor Yellow
-        
-        # Fallback
-        $commitType = Get-ConventionalCommitType -Files $StagedFiles
-        $count = $StagedFiles.Count
-        $fileWord = if ($count -eq 1) { "file" } else { "files" }
-        
-        return "${commitType}: update $count ${fileWord}`n`nAuto-generated commit message"
+        Write-Host "GitHub Copilot generation failed: $_" -ForegroundColor Red
+        Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor DarkGray
+        Write-Host "Falling back to smart generation..." -ForegroundColor Yellow
+        return Get-FallbackCommitMessage -Files $StagedFiles -Diff $Diff
     }
+}
+
+function Get-FallbackCommitMessage {
+    param(
+        [string[]]$Files,
+        [string]$Diff
+    )
+    
+    $commitType = Get-ConventionalCommitType -Files $Files
+    $count = $Files.Count
+    
+    # Analyze what changed
+    $changes = @()
+    if ($Files -match '\.ps1$') { $changes += "PowerShell scripts" }
+    if ($Files -match '\.(ts|tsx)$') { $changes += "TypeScript files" }
+    if ($Files -match '\.(js|jsx)$') { $changes += "JavaScript files" }
+    if ($Files -match '\.py$') { $changes += "Python files" }
+    if ($Files -match '\.(css|scss)$') { $changes += "stylesheets" }
+    if ($Files -match '\.md$') { $changes += "documentation" }
+    if ($Files -match 'package.*\.json$') { $changes += "dependencies" }
+    
+    # Build header
+    $header = if ($changes.Count -gt 0) {
+        "${commitType}: update $($changes -join ', ')"
+    } else {
+        "${commitType}: update $count $(if ($count -eq 1) { 'file' } else { 'files' })"
+    }
+    
+    # Keep header under 72 characters
+    if ($header.Length -gt 72) {
+        $header = "${commitType}: update $count $(if ($count -eq 1) { 'file' } else { 'files' })"
+    }
+    
+    # Build body
+    $body = "`nModified files:"
+    $Files | ForEach-Object { $body += "`n- $_" }
+    $body += "`n`nAuto-generated commit message (Copilot CLI unavailable)"
+    
+    return $header + $body
 }
 
 function Invoke-Commit {
@@ -324,19 +412,20 @@ Test-GitRepository
 $currentBranch = Get-CurrentBranch
 Write-Info "Current branch: $currentBranch"
 
-# Check for Copilot if we need it
+# Check for GitHub Copilot CLI if needed
+$useGitHubCopilot = $false
 if (-not $CustomMessage) {
-    if (-not (Test-CopilotCLI)) {
-        Write-Host "`nFalling back to simple commit messages..." -ForegroundColor Yellow
-        $CustomMessage = "auto"  # Trigger fallback
+    $useGitHubCopilot = Test-GitHubCopilotCLI
+    if (-not $useGitHubCopilot) {
+        Write-Host "`nGitHub Copilot CLI not available - will use smart fallback" -ForegroundColor Yellow
     }
 }
 
 # Check for existing changes
-$hasInitialChanges = -not (Test-GitClean)
+$hasInitialChanges = git status --porcelain
 
 # Pull latest changes
-Invoke-SafePull -HasChanges $hasInitialChanges
+Invoke-SafePull -HasChanges ($null -ne $hasInitialChanges)
 
 # Format code
 Invoke-CodeFormat
@@ -345,26 +434,51 @@ Invoke-CodeFormat
 $stagedFiles = Get-StagedFiles
 
 # Generate commit message
-if ($CustomMessage -and $CustomMessage -ne "auto") {
+if ($CustomMessage) {
     $commitMessage = $CustomMessage
     Write-Info "`nUsing custom commit message:"
     Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
     Write-Host $commitMessage -ForegroundColor White
     Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
 } else {
-    # Get diff for Copilot
+    # Get diff for analysis
     $diff = git diff --cached
-    $commitMessage = Get-CopilotCommitMessage -Diff $diff -StagedFiles $stagedFiles
+    
+    # Generate commit message
+    if ($useGitHubCopilot) {
+        $commitMessage = Get-GitHubCopilotCommitMessage -Diff $diff -StagedFiles $stagedFiles
+    } else {
+        $commitMessage = Get-FallbackCommitMessage -Files $stagedFiles -Diff $diff
+    }
     
     Write-Host "`nGenerated commit message:" -ForegroundColor Green
     Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
     Write-Host $commitMessage -ForegroundColor White
     Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
     
-    # Allow user to abort
+    # Allow user to confirm or edit
     if (-not $DryRun) {
-        Write-Host "`nPress Enter to continue, or Ctrl+C to abort..." -ForegroundColor DarkGray
-        Read-Host
+        Write-Host "`nPress Enter to use this message, 'e' to edit, or Ctrl+C to abort..." -ForegroundColor DarkGray
+        $response = Read-Host
+        if ($response -eq 'e' -or $response -eq 'E') {
+            Write-Host "`nEnter your custom commit message:" -ForegroundColor Yellow
+            Write-Host "(Type your message and press Enter twice when done)" -ForegroundColor DarkGray
+            $customLines = @()
+            $emptyLineCount = 0
+            do {
+                $line = Read-Host
+                if ([string]::IsNullOrWhiteSpace($line)) {
+                    $emptyLineCount++
+                } else {
+                    $emptyLineCount = 0
+                    $customLines += $line
+                }
+            } while ($emptyLineCount -lt 2)
+            
+            if ($customLines.Count -gt 0) {
+                $commitMessage = $customLines -join "`n"
+            }
+        }
     }
 }
 
