@@ -1,7 +1,5 @@
 {
-    "branches": [
-        "master"
-    ],
+    "branches": ["master"],
     "plugins": [
         [
             "@semantic-release/commit-analyzer",
@@ -54,10 +52,7 @@
                     }
                 ],
                 "parserOpts": {
-                    "noteKeywords": [
-                        "BREAKING CHANGE",
-                        "BREAKING CHANGES"
-                    ]
+                    "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES"]
                 }
             }
         ],
@@ -72,7 +67,7 @@
         [
             "@semantic-release/exec",
             {
-                "prepareCmd": "npm run build && cd dist && zip -r ../dist.zip ."
+                "prepareCmd": "npm run build && cd dist && zip -r ../odp-plus-${nextRelease.version}.zip ."
             }
         ],
         [
@@ -80,8 +75,8 @@
             {
                 "assets": [
                     {
-                        "path": "dist.zip",
-                        "label": "ODP+ Extension (${nextRelease.version})"
+                        "path": "odp-plus-*.zip",
+                        "label": "odp-plus-${nextRelease.version}.zip"
                     }
                 ]
             }
@@ -89,11 +84,7 @@
         [
             "@semantic-release/git",
             {
-                "assets": [
-                    "package.json",
-                    "package-lock.json",
-                    "CHANGELOG.md"
-                ],
+                "assets": ["package.json", "package-lock.json", "CHANGELOG.md"],
                 "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
             }
         ]

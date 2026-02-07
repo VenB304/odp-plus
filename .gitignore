@@ -1,7 +1,5 @@
 node_modules/
 dist/
 OnlineDanceParty - Original/
-dist.zip
+odp-plus-*.zip
 test.bat
-testRun.bat
-quick-release.ps1
