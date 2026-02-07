@@ -1,5 +1,5 @@
 # Fully Automatic Release Script
-# Runs checks, formats, stages, auto-generates commit message, commits, and pushes
+# Stages, auto-generates detailed Conventional Commit message using Copilot CLI, commits, and pushes
 # Usage: .\quick-release.ps1
 # Or with custom message: .\quick-release.ps1 -CustomMessage "add new sync feature"
 
@@ -8,6 +8,13 @@ param(
 )
 
 Write-Host "=== ODP+ Auto Release ===" -ForegroundColor Cyan
+
+# Check if Copilot CLI is available
+if (-not (Get-Command copilot -ErrorAction SilentlyContinue)) {
+    Write-Host "Error: 'copilot' CLI not found in PATH." -ForegroundColor Red
+    Write-Host "Please install it: npm install -g @githubnext/github-copilot-cli" -ForegroundColor Yellow
+    exit 1
+}
 
 # Pull latest changes first (rebase to avoid merge commits)
 Write-Host "`nPulling latest changes..." -ForegroundColor Yellow
@@ -56,68 +63,66 @@ if (-not $stagedFiles) {
 Write-Host "Staged files:" -ForegroundColor Yellow
 $stagedFiles | ForEach-Object { Write-Host "  $_" }
 
-# Auto-detect commit type based on changed files
-function Get-CommitType {
-    param($files)
-    
-    $hasCode = $false
-    $hasDocs = $false
-    $hasConfig = $false
-    $hasTests = $false
-    $hasCI = $false
-    
-    foreach ($file in $files) {
-        if ($file -match '\.(ts|js|tsx|jsx|css|html)$' -and $file -notmatch '\.config\.' -and $file -notmatch 'test') {
-            $hasCode = $true
-        }
-        if ($file -match '\.(md|txt)$' -or $file -match 'README|CHANGELOG|docs/') {
-            $hasDocs = $true
-        }
-        if ($file -match '(package\.json|\.json$|\.yaml$|\.yml$|\.config\.)' -and $file -notmatch 'workflows/') {
-            $hasConfig = $true
-        }
-        if ($file -match 'test|spec') {
-            $hasTests = $true
-        }
-        if ($file -match '\.github/workflows/|\.github/actions/') {
-            $hasCI = $true
-        }
-    }
-    
-    # Priority order for determining type
-    if ($hasCI) { return "ci" }
-    if ($hasTests -and -not $hasCode) { return "test" }
-    if ($hasDocs -and -not $hasCode) { return "docs" }
-    if ($hasConfig -and -not $hasCode) { return "chore" }
-    if ($hasCode) { return "feat" }
-    
-    return "chore"
-}
-
 # Generate commit message
-$commitType = Get-CommitType -files $stagedFiles
-
-# Create a summary of changes
-$fileCount = ($stagedFiles | Measure-Object).Count
-$summary = if ($CustomMessage) {
-    $CustomMessage
+if ($CustomMessage) {
+    $commitMessage = $CustomMessage
 } else {
-    # Auto-generate summary based on files
-    $dirs = $stagedFiles | ForEach-Object { Split-Path $_ -Parent } | Where-Object { $_ } | Select-Object -Unique
+    Write-Host "`nGenerating detailed commit message with Copilot..." -ForegroundColor Cyan
     
-    if ($fileCount -eq 1) {
-        "update $($stagedFiles[0])"
-    } elseif ($dirs.Count -eq 1 -and $dirs[0]) {
-        "update $($dirs[0]) ($fileCount files)"
-    } else {
-        "update $fileCount files"
+    # 1. Capture Diff (truncate if too large)
+    $diff = git diff --cached
+    if ($diff.Length -gt 6000) {
+        $diff = git diff --cached --stat
+        Write-Host "Diff too large, using --stat for context." -ForegroundColor DarkGray
+    }
+    
+    # 2. Read copilot-instructions.md
+    $instructions = ""
+    if (Test-Path "copilot-instructions.md") {
+        $instructions = Get-Content "copilot-instructions.md" -Raw
+    }
+    
+    # 3. Construct Prompt
+    $prompt = "Context: $instructions`n`nChanges:`n$diff`n`nTask: Generate a single detailed Conventional Commit message for these changes. The message MUST start with a semantic prefix (feat:, fix:, docs:, chore:, etc.). It MUST have a header line (type: summary) and a body with bullet points explaining the changes. Do not use markdown fences. Output ONLY the raw message."
+    
+    # 4. Call Copilot
+    # Note: copilot CLI might not support -p directly depending on version, checking help output earlier suggested interactive.
+    # We'll try piping or argument if supported, but typically 'copilot' CLI is interactive.
+    # However, 'copilot' CLI (GitHub Copilot CLI) usually supports 'suggest' or 'explain' with query.
+    # Wait, user checking 'copilot --help' showed it is interactive mainly.
+    # Let's try 'copilot -s "command"' or similar if it's the GitHubNext one?
+    # Actually, the user's output for `copilot --help` showed `copilot init`, `copilot --allow-all-urls` etc.
+    # This looks like the specialized agent CLI or similar.
+    # If standard non-interactive is tricky, we can use the `gh copilot suggest` (which is deprecated but user has `copilot` standalone).
+    # Let's try a direct query execution if possible.
+    # If not, we'll fall back to simple heuristic if copilot fails.
+    
+    # Validating usage from previous turns: 'copilot "hello"' failed with "Did you mean: copilot -i?" and mentioned -p.
+    # Users output: "For non-interactive mode, use the -p or --prompt option."
+    # So -p IS supported! Great.
+    
+    try {
+        # Using cmd /c to ensure proper execution of the batch/cmd wrapper if on Windows
+        $commitMessageRaw = cmd /c copilot -p "$prompt" 2>$null
+        
+        # Clean up output (sometimes returns quotes or wrappers)
+        $commitMessage = $commitMessageRaw -replace '^[`"''\s]+|[`"''\s]+$', ''
+        
+        if (-not $commitMessage) { throw "Empty response" }
+    } catch {
+        Write-Host "Copilot generation failed or returned empty. Falling back to heuristic." -ForegroundColor Red
+        # Fallback to simple generation
+        $commitType = "chore"
+        if ($stagedFiles -match '\.(ts|js|jsx|tsx)$') { $commitType = "feat" }
+        $count = ($stagedFiles | Measure-Object).Count
+        $commitMessage = "{0}: update {1} files" -f $commitType, $count
     }
 }
-
-$commitMessage = "${commitType}: ${summary}"
 
 Write-Host "`nCommit message:" -ForegroundColor Green
-Write-Host "  $commitMessage" -ForegroundColor White
+Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
+Write-Host "$commitMessage" -ForegroundColor White
+Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
 
 # Commit
 Write-Host "`nCommitting..." -ForegroundColor Yellow
@@ -128,4 +133,4 @@ Write-Host "`nPushing to origin..." -ForegroundColor Yellow
 git push
 
 Write-Host "`n=== Done! ===" -ForegroundColor Green
-Write-Host "Check GitHub Actions for the automatic release: https://github.com/VenB304/odp-plus/actions" -ForegroundColor Cyan
+Write-Host "Check GitHub Actions: https://github.com/VenB304/odp-plus/actions" -ForegroundColor Cyan
