@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/VenB304/odp-plus/compare/v1.2.1...v1.2.2) (2026-02-07)
+
+
+### Bug Fixes
+
+* improve Windows compatibility for tag retrieval in quick-release ([96a3cb4](https://github.com/VenB304/odp-plus/commit/96a3cb491051e80faec79168b8d46f3feff63fa7))
+
 ## [1.2.1](https://github.com/VenB304/odp-plus/compare/v1.2.0...v1.2.1) (2026-02-07)
 
 # [1.2.0](https://github.com/VenB304/odp-plus/compare/v1.1.0...v1.2.0) (2026-02-07)
