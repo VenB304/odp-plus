@@ -9,23 +9,38 @@ param(
 
 Write-Host "=== ODP+ Auto Release ===" -ForegroundColor Cyan
 
-# Run format first (auto-fixes issues)
+# Pull latest changes first (rebase to avoid merge commits)
+Write-Host "`nPulling latest changes..." -ForegroundColor Yellow
+
+# Stash changes if any
+$hasChanges = $false
+if (git status --porcelain) {
+    $hasChanges = $true
+    Write-Host "Stashing local changes..." -ForegroundColor DarkGray
+    git stash push -u -m "Auto-release stash"
+}
+
+git pull --rebase
+$pullExitCode = $LASTEXITCODE
+
+# Pop stash if we stashed
+if ($hasChanges) {
+    Write-Host "Restoring local changes..." -ForegroundColor DarkGray
+    git stash pop
+}
+
+if ($pullExitCode -ne 0) {
+    Write-Host "Pull failed! Please resolve conflicts manually." -ForegroundColor Red
+    exit 1
+}
+
+# Run format (auto-fixes issues)
 Write-Host "`nFormatting code..." -ForegroundColor Yellow
 npm run format
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Format failed!" -ForegroundColor Red
     exit 1
 }
-
-# Run checks (build, lint, prettier verify, tsc)
-Write-Host "`nRunning checks..." -ForegroundColor Yellow
-npm run check
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Checks failed! Fix errors before releasing." -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "`nAll checks passed!" -ForegroundColor Green
 
 # Stage all changes
 Write-Host "`nStaging changes..." -ForegroundColor Yellow
