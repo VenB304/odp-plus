@@ -104,6 +104,6 @@ Looking for technical details, build commands, or want to contribute?
 
 ## Credits
 
-- Based on [Online Dance Party](https://codeberg.org/ODP)
+- Based on the original implementation, [Online Dance Party](https://codeberg.org/ODP).
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
