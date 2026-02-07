@@ -237,11 +237,13 @@ GIT DIFF:
 
 REQUIREMENTS:
 1. Header: <type>: <summary> (under 72 chars)
-2. Body: Detailed explanation of WHAT changed and WHY.
-3. Use bullet points in body for clarity.
-4. BE DESCRIPTIVE: Do NOT just copy the header into the body.
-5. TECHNICAL DETAILS: Explain technical changes, not just "updated files".
-6. RELEASE NOTES STYLE: Write the body as if it were for a GitHub Release description.
+2. Body (RELEASE NOTES STYLE):
+   - Summarize key technical changes and their impact.
+   - Use technical but accessible language.
+   - Organize with bullet points for readability.
+   - Focus on the "WHY" and "WHAT", not just a list of files.
+   - This body will be used for automated release notes generation.
+3. BE DESCRIPTIVE: Do NOT just duplicate the header.
 
 IMPORTANT:
 - Output ONLY the commit message (no markdown fences, no explanations)
@@ -371,8 +373,10 @@ def wait_for_release(branch, max_wait_time, dry_run=False):
                 
                 if res.returncode == 0:
                     # Get the absolute newest tag by date
-                    tag_res = run_command("git describe --tags $(git rev-list --tags --max-count=1)")
-                    tag = tag_res.stdout.strip()
+                    # Fixed for Windows compatibility: use direct git command and parse in Python
+                    tag_list_res = run_command("git tag --sort=-v:refname")
+                    tags = [t.strip() for t in tag_list_res.stdout.split('\n') if t.strip()]
+                    tag = tags[0] if tags else "unknown"
                     print_color(f"[OK] Release commit pulled. New version: {tag}", "GREEN")
                     return
                 else:
