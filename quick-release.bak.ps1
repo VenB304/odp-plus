@@ -17,7 +17,13 @@ param(
     [switch]$DryRun,
     
     [Parameter(HelpMessage = "Maximum diff size for Copilot (default: 5000)")]
-    [int]$MaxDiffSize = 5000
+    [int]$MaxDiffSize = 5000,
+    
+    [Parameter(HelpMessage = "Wait for semantic-release-bot commit after pushing (default: true)")]
+    [bool]$WaitForRelease = $true,
+    
+    [Parameter(HelpMessage = "Maximum time to wait for semantic-release-bot in seconds (default: 120)")]
+    [int]$ReleaseWaitTimeout = 120
 )
 
 $ErrorActionPreference = "Stop"
@@ -116,11 +122,6 @@ function Invoke-SafePull {
 }
 
 function Invoke-CodeFormat {
-    if ($SkipFormat) {
-        Write-Info "Skipping format step (-SkipFormat flag used)"
-        return
-    }
-    
     Write-Step "Formatting code..."
     
     # Check if package.json exists and has format script
@@ -196,10 +197,18 @@ function Get-GitHubCopilotCommitMessage {
     
     Write-Step "Generating commit message with GitHub Copilot CLI..."
     
-    # Truncate diff if too large
+    # Smart truncation - keep important parts
+    $originalLength = $Diff.Length
     if ($Diff.Length -gt $MaxDiffSize) {
-        $Diff = $Diff.Substring(0, $MaxDiffSize)
-        Write-Host "Diff truncated to $MaxDiffSize characters" -ForegroundColor DarkGray
+        # Try to keep complete hunks rather than cutting mid-line
+        $truncated = $Diff.Substring(0, $MaxDiffSize)
+        $lastNewline = $truncated.LastIndexOf("`n@@")
+        if ($lastNewline -gt ($MaxDiffSize * 0.8)) {
+            $Diff = $truncated.Substring(0, $lastNewline)
+        } else {
+            $Diff = $truncated
+        }
+        Write-Host "Diff truncated from $originalLength to $($Diff.Length) chars (kept complete hunks)" -ForegroundColor DarkGray
     }
     
     # Read copilot-instructions.md if available
@@ -209,78 +218,81 @@ function Get-GitHubCopilotCommitMessage {
         Write-Host "Using copilot-instructions.md for context" -ForegroundColor DarkGray
     }
     
-    # Build file summary
-    $fileSummary = ($StagedFiles | ForEach-Object { "- $_" }) -join "`n"
+    # Build file summary with change stats
+    $fileSummary = @()
+    foreach ($file in $StagedFiles) {
+        $stats = git diff --cached --numstat -- $file
+        if ($stats) {
+            $parts = $stats -split "`t"
+            $added = $parts[0]
+            $removed = $parts[1]
+            $fileSummary += "- $file (+$added/-$removed)"
+        } else {
+            $fileSummary += "- $file"
+        }
+    }
+    $fileSummaryText = $fileSummary -join "`n"
     
     # Construct detailed prompt following your copilot-instructions.md
-    $prompt = @"
-Write a git commit message following Conventional Commits specification.
-
-PROJECT COMMIT GUIDELINES:
-$instructions
-
-FILES CHANGED ($($StagedFiles.Count) files):
-$fileSummary
-
-GIT DIFF:
-$Diff
-
-Generate a commit message with:
-1. Header: <type>: <summary> (under 72 chars)
-2. Body: Detailed explanation of what and why
-3. Use types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-4. Be specific about components/files changed
-5. Explain the purpose and benefits
-
-Output ONLY the commit message (no markdown fences, no explanations).
-"@
+    # $prompt = "simple prompt"
+    $prompt = "Write a simple commit message"
 
     try {
-        Write-Host "Calling GitHub Copilot CLI..." -ForegroundColor DarkGray
+        Write-Host "Calling GitHub Copilot CLI..." -ForegroundColor Cyan
         
         # Simple approach: Write prompt to temp file, pipe it to copilot via stdin
         $promptFile = [System.IO.Path]::GetTempFileName()
-        $outputFile = [System.IO.Path]::GetTempFileName()
         
         try {
             # Write the prompt to file
             Set-Content -Path $promptFile -Value $prompt -Encoding UTF8
             
-            # Use copilot in a simpler way - just pipe the file content
-            # The -p flag might be the issue, let's try interactive mode with input redirect
-            Write-Host "Executing: Get-Content prompt | copilot --silent --allow-all-tools" -ForegroundColor DarkGray
+            # Use copilot without --silent to see usage stats
+            Write-Host "Executing: Get-Content prompt | copilot --allow-all-tools" -ForegroundColor DarkGray
             
-            # Method: Use PowerShell pipeline which handles this cleanly
-            $copilotOutput = Get-Content $promptFile -Raw | & copilot --silent --allow-all-tools 2>&1
+            # Use PowerShell pipeline which handles this cleanly
+            $copilotOutput = Get-Content $promptFile -Raw | & copilot --allow-all-tools 2>&1
             
-            # Alternative: If that doesn't work, save to output file using redirection
-            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($copilotOutput -join ""))) {
-                Write-Host "Trying alternative invocation method..." -ForegroundColor DarkGray
-                
-                # Create a batch script to handle the execution
-                $batchFile = [System.IO.Path]::GetTempFileName() + ".bat"
-                $batchContent = @"
-@echo off
-copilot -p "@$promptFile" --silent --allow-all-tools > "$outputFile" 2>&1
-"@
-                Set-Content -Path $batchFile -Value $batchContent -Encoding ASCII
-                
-                # Execute the batch file
-                $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$batchFile`"" -Wait -PassThru -NoNewWindow
-                
-                if ($process.ExitCode -eq 0 -and (Test-Path $outputFile)) {
-                    $copilotOutput = Get-Content $outputFile -Raw
-                } else {
-                    throw "Batch invocation failed with exit code $($process.ExitCode)"
-                }
-                
-                Remove-Item $batchFile -Force -ErrorAction SilentlyContinue
+            if ($LASTEXITCODE -ne 0) {
+                throw "Copilot failed with exit code $LASTEXITCODE"
             }
             
             # Process output
             $rawString = if ($copilotOutput -is [array]) { $copilotOutput -join "`n" } else { $copilotOutput }
             
-            Write-Host "Copilot response received (length: $($rawString.Length) chars)" -ForegroundColor DarkGray
+            # Split response from stats
+            # Stats typically appear at the end after the response
+            $lines = $rawString -split "`n"
+            
+            # Find where stats begin (usually "Total usage est:" or similar)
+            $statsStartIndex = -1
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match "(Total usage|Breakdown by|Model:|Request)") {
+                    $statsStartIndex = $i
+                    break
+                }
+            }
+            
+            if ($statsStartIndex -gt 0) {
+                # Extract message and stats separately
+                $messageLines = $lines[0..($statsStartIndex - 1)]
+                $statsLines = $lines[$statsStartIndex..($lines.Count - 1)]
+                
+                $rawString = $messageLines -join "`n"
+                $stats = $statsLines -join "`n"
+                
+                # Display stats
+                Write-Host "`nCopilot Usage Stats:" -ForegroundColor Cyan
+                $statsLines | ForEach-Object { 
+                    if ($_ -match "Model:") {
+                        Write-Host "  $_" -ForegroundColor Yellow
+                    } else {
+                        Write-Host "  $_" -ForegroundColor DarkGray
+                    }
+                }
+            }
+            
+            Write-Host "`nCopilot response received (length: $($rawString.Length) chars)" -ForegroundColor DarkGray
             
             # Clean up the response
             $cleaned = $rawString `
@@ -298,21 +310,20 @@ copilot -p "@$promptFile" --silent --allow-all-tools > "$outputFile" 2>&1
             # Check if it follows conventional commit format
             $firstLine = ($commitMessage -split "`n")[0]
             if ($commitMessage -notmatch '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+?\))?:\s') {
-                Write-Host "Warning: Response may not follow Conventional Commit format" -ForegroundColor Yellow
+                Write-Host "`nWarning: Response may not follow Conventional Commit format" -ForegroundColor Yellow
                 Write-Host "First line: $firstLine" -ForegroundColor DarkGray
             }
             
-            Write-Success "[OK] Commit message generated by GitHub Copilot"
+            Write-Success "`n[OK] Commit message generated by GitHub Copilot"
             return $commitMessage
             
         } finally {
             # Clean up temp files
             Remove-Item $promptFile -Force -ErrorAction SilentlyContinue
-            Remove-Item $outputFile -Force -ErrorAction SilentlyContinue
         }
         
     } catch {
-        Write-Host "GitHub Copilot generation failed: $_" -ForegroundColor Red
+        Write-Host "`nGitHub Copilot generation failed: $_" -ForegroundColor Red
         Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor DarkGray
         Write-Host "Falling back to smart generation..." -ForegroundColor Yellow
         return Get-FallbackCommitMessage -Files $StagedFiles -Diff $Diff
@@ -380,6 +391,75 @@ function Invoke-Commit {
     Write-Success "[OK] Changes committed"
 }
 
+function Wait-ForSemanticRelease {
+    param(
+        [string]$Branch,
+        [int]$MaxWaitTime = 120
+    )
+    
+    Write-Step "Waiting for semantic-release-bot to finish..."
+    Write-Host "Checking for automated release commit..." -ForegroundColor DarkGray
+    
+    $pollInterval = 3  # Check every 3 seconds
+    $elapsed = 0
+    $lastCommitBefore = git rev-parse HEAD
+    
+    while ($elapsed -lt $MaxWaitTime) {
+        Start-Sleep -Seconds $pollInterval
+        $elapsed += $pollInterval
+        
+        # Fetch latest from remote
+        git fetch origin $Branch 2>&1 | Out-Null
+        
+        # Check if there are new commits from semantic-release-bot
+        $remoteCommit = git rev-parse origin/$Branch
+        
+        if ($remoteCommit -ne $lastCommitBefore) {
+            # Check if the new commit is from semantic-release-bot
+            $commitAuthor = git log -1 --format="%an" origin/$Branch
+            $commitMessage = git log -1 --format="%s" origin/$Branch
+            
+            if ($commitAuthor -match "semantic-release-bot" -or $commitMessage -match "^(chore\(release\)|Release)") {
+                Write-Success "`n[OK] Semantic release detected!"
+                Write-Host "  Author: $commitAuthor" -ForegroundColor DarkGray
+                Write-Host "  Message: $commitMessage" -ForegroundColor DarkGray
+                
+                # Pull the release commit
+                Write-Host "`nPulling release commit..." -ForegroundColor Yellow
+                git pull --rebase origin $Branch 2>&1 | Out-Null
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "[OK] Release commit pulled successfully"
+                    
+                    # Show the release info if available
+                    $releaseTag = git describe --tags --abbrev=0 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "`n🎉 New version released: $releaseTag" -ForegroundColor Cyan
+                    }
+                    return $true
+                } else {
+                    Write-Host "Warning: Failed to pull release commit" -ForegroundColor Yellow
+                    return $false
+                }
+            } else {
+                Write-Host "`nNew commit detected but not from semantic-release-bot" -ForegroundColor Yellow
+                Write-Host "  Author: $commitAuthor" -ForegroundColor DarkGray
+                Write-Host "Continuing to wait..." -ForegroundColor DarkGray
+                $lastCommitBefore = $remoteCommit
+            }
+        }
+        
+        # Show progress indicator
+        $dots = "." * (($elapsed / $pollInterval) % 4)
+        Write-Host "`rWaiting for semantic-release-bot$dots    " -NoNewline -ForegroundColor DarkGray
+    }
+    
+    Write-Host "`n" # Clear the waiting line
+    Write-Host "No semantic-release-bot commit detected after ${MaxWaitTime}s" -ForegroundColor Yellow
+    Write-Host "You can manually pull later with: git pull" -ForegroundColor DarkGray
+    return $false
+}
+
 function Invoke-Push {
     param([string]$Branch)
     
@@ -415,72 +495,14 @@ Write-Info "Current branch: $currentBranch"
 # Check for GitHub Copilot CLI if needed
 $useGitHubCopilot = $false
 if (-not $CustomMessage) {
-    $useGitHubCopilot = Test-GitHubCopilotCLI
-    if (-not $useGitHubCopilot) {
-        Write-Host "`nGitHub Copilot CLI not available - will use smart fallback" -ForegroundColor Yellow
-    }
+    Write-Host "DEBUG: Copilot check (DUMMY)"
 }
 
-# Check for existing changes
-$hasInitialChanges = git status --porcelain
+Write-Host "Debug: Copilot check done"
 
-# Pull latest changes
-Invoke-SafePull -HasChanges ($null -ne $hasInitialChanges)
+# $stagedFiles = Get-StagedFiles
 
-# Format code
-Invoke-CodeFormat
-
-# Stage and get files
-$stagedFiles = Get-StagedFiles
-
-# Generate commit message
-if ($CustomMessage) {
-    $commitMessage = $CustomMessage
-    Write-Info "`nUsing custom commit message:"
-    Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host $commitMessage -ForegroundColor White
-    Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
-} else {
-    # Get diff for analysis
-    $diff = git diff --cached
-    
-    # Generate commit message
-    if ($useGitHubCopilot) {
-        $commitMessage = Get-GitHubCopilotCommitMessage -Diff $diff -StagedFiles $stagedFiles
-    } else {
-        $commitMessage = Get-FallbackCommitMessage -Files $stagedFiles -Diff $diff
-    }
-    
-    Write-Host "`nGenerated commit message:" -ForegroundColor Green
-    Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host $commitMessage -ForegroundColor White
-    Write-Host "--------------------------------------------------" -ForegroundColor DarkGray
-    
-    # Allow user to confirm or edit
-    if (-not $DryRun) {
-        Write-Host "`nPress Enter to use this message, 'e' to edit, or Ctrl+C to abort..." -ForegroundColor DarkGray
-        $response = Read-Host
-        if ($response -eq 'e' -or $response -eq 'E') {
-            Write-Host "`nEnter your custom commit message:" -ForegroundColor Yellow
-            Write-Host "(Type your message and press Enter twice when done)" -ForegroundColor DarkGray
-            $customLines = @()
-            $emptyLineCount = 0
-            do {
-                $line = Read-Host
-                if ([string]::IsNullOrWhiteSpace($line)) {
-                    $emptyLineCount++
-                } else {
-                    $emptyLineCount = 0
-                    $customLines += $line
-                }
-            } while ($emptyLineCount -lt 2)
-            
-            if ($customLines.Count -gt 0) {
-                $commitMessage = $customLines -join "`n"
-            }
-        }
-    }
-}
+Write-Host "DEBUG: Skipping generation logic"
 
 # Commit
 Invoke-Commit -Message $commitMessage
@@ -488,11 +510,21 @@ Invoke-Commit -Message $commitMessage
 # Push
 Invoke-Push -Branch $currentBranch
 
-# Summary
-Write-Host "`n=== Done! ===" -ForegroundColor Green
-
-if (-not $DryRun) {
-    Write-Info "Check GitHub Actions: https://github.com/VenB304/odp-plus/actions"
+# Wait for semantic-release-bot if enabled
+if ($WaitForRelease -and -not $DryRun) {
+    if (Test-Path ".releaserc.json" -PathType Leaf) {
+        $releaseDetected = Wait-ForSemanticRelease -Branch $currentBranch -MaxWaitTime $ReleaseWaitTimeout
+        
+        if ($releaseDetected) {
+            Write-Host "`nYour working directory is now up-to-date with the latest release!" -ForegroundColor Green
+        }
+    } else {
+        Write-Info "Skipping wait for release (no .releaserc.json found)"
+    }
 }
 
+# Summary
+Write-Host "`n╔════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "║                           Done!                                    ║" -ForegroundColor Green
+Write-Host "╚════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 exit 0
