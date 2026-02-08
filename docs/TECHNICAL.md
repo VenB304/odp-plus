@@ -78,6 +78,21 @@ Scoring is handled by your **phone** (connects directly to JDN) — ODP+ only sy
 
 ---
 
+## Using Releases
+
+For most users, we recommend downloading pre-built releases instead of building from source.
+
+### Getting the Latest Release
+
+1. Visit the [Releases page](https://github.com/VenB304/odp-plus/releases)
+2. Download the latest `odp-plus-x.x.x.zip` file
+3. Extract the ZIP file
+4. Load the extracted folder as an unpacked extension in your browser
+
+This gives you a production-ready build without needing Node.js or build tools.
+
+---
+
 ## Development
 
 ### Prerequisites
