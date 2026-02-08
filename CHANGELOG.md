@@ -1,3 +1,5 @@
+## [1.2.3](https://github.com/VenB304/odp-plus/compare/v1.2.2...v1.2.3) (2026-02-08)
+
 ## [1.2.2](https://github.com/VenB304/odp-plus/compare/v1.2.1...v1.2.2) (2026-02-07)
 
 
