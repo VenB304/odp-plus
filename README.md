@@ -25,7 +25,23 @@ Before you start, make sure you have:
 
 ## Installation (Easy Setup!)
 
-### For Windows Users
+### 📦 Option 1: Download Pre-built Release (Recommended)
+
+**This is the easiest way for most users!**
+
+1. Go to the [**Releases page**](https://github.com/VenB304/odp-plus/releases/latest)
+2. Download the latest `odp-plus-x.x.x.zip` file
+3. **Unzip** the downloaded file
+4. **Add to your browser** (see instructions below)
+
+### 🔨 Option 2: Build from Source
+
+**For developers or if you want the latest changes:**
+
+<details>
+<summary>Click to expand build instructions</summary>
+
+#### For Windows Users
 
 1. **Download** this project (green "Code" button → "Download ZIP") and unzip it
 2. **Double-click** `INSTALL.bat`
@@ -34,18 +50,26 @@ Before you start, make sure you have:
 
 > 💡 **Tip**: If you see a Windows security warning, click "More info" → "Run anyway"
 
+#### For Other Platforms
+
+See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
+
+</details>
+
 ### Adding to Chrome/Edge/Brave
 
 1. Open your browser and go to `chrome://extensions` (or `edge://extensions`)
 2. Turn **ON** "Developer mode" (toggle in the top right)
 3. Click **"Load unpacked"**
-4. Select the `dist` folder that opened
+4. Select the **unzipped folder** (it contains the `manifest.json` file)
 
 ### Adding to Firefox
 
 1. Open Firefox and go to `about:debugging#/runtime/this-firefox`
 2. Click **"Load Temporary Add-on"**
-3. Open the `dist` folder and select `manifest.json`
+3. Navigate to the **unzipped folder** and select `manifest.json`
+
+> ⚠️ **Note**: Firefox extensions loaded this way are temporary and will be removed when you close Firefox. For a permanent installation, consider using Chrome/Edge/Brave.
 
 ---
 
