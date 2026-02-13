@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/VenB304/odp-plus/compare/v1.5.0...v1.6.0) (2026-02-13)
+
+
+### Features
+
+* add sync-gate API for coordinated video start/finish ([80083b6](https://github.com/VenB304/odp-plus/commit/80083b631fddf7a58c182a67ef6d13e3061e1b7c))
+
 # [1.5.0](https://github.com/VenB304/odp-plus/compare/v1.4.0...v1.5.0) (2026-02-13)
 
 
