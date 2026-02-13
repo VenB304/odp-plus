@@ -2,15 +2,15 @@
     {
         "odpClient": {
             "tag": "Host",
-            "contents": { "id": "id1" }
+            "contents": { "id": "ODP-Host" }
         },
-        "originalWSURL": "wss://ire-prod-drs.justdancenow.com/screen?client=xxx&tag=xxx"
+        "note": "Host connects to JDN directly; Room ID is auto-detected from the JDN WebSocket. P2P peer ID is deterministic: odp-{roomId}."
     },
     {
         "odpClient": {
             "tag": "Follower",
-            "contents": { "hostToFollow": "id1" }
+            "contents": { "hostToFollow": "1999" }
         },
-        "originalWSURL": "wss://ire-prod-drs.justdancenow.com/screen?client=xxx&tag=xxx"
+        "note": "Follower connects to the Host via PeerJS (WebRTC). The hostToFollow value is the Room ID entered in the popup."
     }
 ]

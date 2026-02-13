@@ -120,17 +120,29 @@ npm run release    # Create release zip
 ```
 ODP+/
 ├── src/
-│   ├── css/              # Popup styles
-│   ├── manifest.json     # Extension manifest
-│   ├── popup.html        # Extension popup UI
-│   ├── odp-websocket.ts  # WebSocket proxy logic
-│   ├── p2p-client.ts     # PeerJS P2P client
-│   ├── game-state.ts     # Game state management
-│   ├── validation.ts     # Message validation
-│   └── ...
-├── dist/                 # Built extension (generated)
-├── docs/                 # Documentation
-└── img/                  # Extension icons
+│   ├── css/
+│   │   └── odp.css             # Popup & theme styles (dark/light)
+│   ├── model/
+│   │   ├── GameStateManager.ts # Game state tracking & late-joiner replay
+│   │   ├── ODPClient.ts        # Host/Follower client type model
+│   │   └── inject-data.ts      # Script injection data model
+│   ├── manifest.json           # Extension manifest (V3)
+│   ├── popup.html              # Extension popup UI
+│   ├── popup.ts                # Popup logic & mode selection
+│   ├── odp-websocket.ts        # WebSocket proxy & ODP message handling
+│   ├── p2p-client.ts           # PeerJS P2P client & clock sync
+│   ├── P2POrchestrator.ts      # P2P lifecycle, handshake & broadcasting
+│   ├── validation.ts           # Input & message validation
+│   ├── odp-msg.ts              # ODP protocol message types
+│   ├── jdn-protocol.ts         # JDN WebSocket protocol helpers
+│   ├── redirect.ts             # WebSocket constructor override
+│   ├── inject-redirect.ts      # Content script injector
+│   ├── storage.ts              # Browser storage abstraction
+│   ├── utils.ts                # Utilities (sleep, region detection)
+│   └── wait-for-elem.ts        # DOM element observer
+├── dist/                       # Built extension (generated)
+├── docs/                       # Documentation
+└── img/                        # Extension icons
 ```
 
 ---
