@@ -4,7 +4,6 @@ const storage = browser.storage.local
 
 const serverKey = "server"
 
-//todo: both follower id and host id should be saved and restored
 export async function getServer(): Promise<string | undefined> {
     return (await storage.get(serverKey))[serverKey]
 }
@@ -19,6 +18,8 @@ export async function removeServer(): Promise<void> {
 
 const typeKey = "type"
 const idKey = "id"
+const hostIdKey = "hostId"
+const followerIdKey = "followerId"
 
 export async function getODPClient(): Promise<ODPClient | null> {
     const type = (await storage.get(typeKey))[typeKey]
@@ -39,12 +40,22 @@ export async function setODPClient(odpClient: ODPClient): Promise<void> {
     let id
     if (odpClient.contents instanceof Host) {
         id = odpClient.contents.id
+        await storage.set({ [hostIdKey]: id })
     } else {
         id = odpClient.contents.hostToFollow
+        await storage.set({ [followerIdKey]: id })
     }
     await storage.set({ [typeKey]: odpClient.tag, [idKey]: id })
 }
 
 export async function removeODPClient(): Promise<void> {
     await storage.remove([typeKey, idKey])
+}
+
+export async function getSavedHostId(): Promise<string | undefined> {
+    return (await storage.get(hostIdKey))[hostIdKey]
+}
+
+export async function getSavedFollowerId(): Promise<string | undefined> {
+    return (await storage.get(followerIdKey))[followerIdKey]
 }

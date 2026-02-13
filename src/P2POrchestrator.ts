@@ -67,6 +67,13 @@ export class P2POrchestrator {
     }
 
     /**
+     * Start periodic clock re-sync for followers to prevent drift.
+     */
+    public startPeriodicSync(): void {
+        this.p2pClient?.startPeriodicSync()
+    }
+
+    /**
      * Handle incoming JDN message for state tracking.
      */
     public handleMessage(msg: JDNMessage): void {

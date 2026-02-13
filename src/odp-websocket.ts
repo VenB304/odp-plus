@@ -102,9 +102,10 @@ export class OdpWebSocket extends WebSocket {
                 )
                 this.orchestrator.initialize(false, roomId)
 
-                // Trigger Clock Sync shortly after init
+                // Trigger Clock Sync shortly after init, then start periodic re-sync
                 setTimeout(() => {
                     this.orchestrator?.syncClock()
+                    this.orchestrator?.startPeriodicSync()
                 }, 2000)
             } else if (this.isHost) {
                 console.log("[ODP] Host initializing (waiting for JDN connect)")
