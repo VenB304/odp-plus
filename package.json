@@ -1,6 +1,6 @@
 {
     "name": "odp-plus",
-    "version": "1.3.3",
+    "version": "1.3.4",
     "description": "Serverless P2P multiplayer for Just Dance Now.",
     "scripts": {
         "start": "npm run build && web-ext run --source-dir dist --url \"https://justdancenow.com\"",

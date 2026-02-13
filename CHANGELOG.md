@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/VenB304/odp-plus/compare/v1.3.3...v1.3.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* improve VPN warning reliability and P2P sync outlier rejection ([68218e7](https://github.com/VenB304/odp-plus/commit/68218e7943a18c0154cf38a8c14cb68bead7feca))
+
 ## [1.3.3](https://github.com/VenB304/odp-plus/compare/v1.3.2...v1.3.3) (2026-02-13)
 
 
