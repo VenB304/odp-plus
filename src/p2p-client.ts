@@ -121,8 +121,6 @@ export class P2PClient {
         if (!this.peer) return
         const hostId = this.getPeerId()
         const maxRetries = 8
-        // Exponential backoff: 3s, 4.5s, 6.75s, ~10s, ~15s, ~22s, ~34s, ~50s (capped at 60s)
-        const delay = Math.min(3000 * Math.pow(1.5, retryCount), 60000)
 
         console.log(
             `[P2P] Connecting to Host: ${hostId} (attempt ${retryCount + 1}/${maxRetries})`,
@@ -135,11 +133,16 @@ export class P2PClient {
         // Connection timeout with exponential backoff retry
         const connectionTimeout = setTimeout(() => {
             if (!conn.open && retryCount < maxRetries) {
+                // Exponential backoff: 3s, 4.5s, 6.75s, ~10s, ~15s, ~22s, ~34s, ~50s (capped at 60s)
+                const retryDelay = Math.min(
+                    3000 * Math.pow(1.5, retryCount),
+                    60000,
+                )
                 console.log(
-                    `[P2P] Connection timed out, retrying in ${Math.round(delay / 1000)}s...`,
+                    `[P2P] Connection timed out, retrying in ${Math.round(retryDelay / 1000)}s...`,
                 )
                 conn.close()
-                this.connectToHost(retryCount + 1)
+                setTimeout(() => this.connectToHost(retryCount + 1), retryDelay)
             } else if (retryCount >= maxRetries) {
                 console.error(
                     "[P2P] Max retries reached. Could not connect to host.",
