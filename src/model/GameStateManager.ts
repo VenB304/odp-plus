@@ -25,7 +25,7 @@ export class GameStateManager {
         start: null,
     }
 
-    private players: JDNMessage[] = []
+    private players: Map<string, JDNMessage> = new Map()
     private _isMidSong = false
 
     public get isMidSong(): boolean {
@@ -33,14 +33,16 @@ export class GameStateManager {
     }
 
     public handleMessage(msg: JDNMessage) {
-        // Track Players
+        // Track Players (deduplicated by player ID)
         if (msg.func === "playerJoined") {
-            this.players.push(msg)
+            const playerId = msg.newPlayer?.id
+            if (playerId) {
+                this.players.set(playerId, msg)
+            }
         } else if (msg.func === "playerLeft") {
-            this.players = this.players.filter((p: JDNMessage) => {
-                const playerId = p.newPlayer?.id
-                return playerId !== undefined && playerId !== msg.playerID
-            })
+            if (msg.playerID) {
+                this.players.delete(msg.playerID)
+            }
         }
 
         // Track Song State
@@ -49,6 +51,8 @@ export class GameStateManager {
         } else if (msg.func === "navRest") {
             this.state.navRest = msg
         } else if (msg.func === "songSelected") {
+            // New song chosen — reset previous song state
+            this.resetSongState()
             this.state.selected = msg
         } else if (msg.func === "coachSelected") {
             this.state.coachSelected = msg
@@ -59,7 +63,11 @@ export class GameStateManager {
         } else if (msg.func === "songStart") {
             this.state.start = msg
             this._isMidSong = true
-        } else if (msg.func === "songEnd" || msg.func === "returnToLobby") {
+        } else if (
+            msg.func === "songEnd" ||
+            msg.func === "returnToLobby" ||
+            msg.func === "results"
+        ) {
             this._isMidSong = false
             this.resetSongState()
         }
@@ -68,8 +76,10 @@ export class GameStateManager {
     public getReplayMessages(): JDNMessage[] {
         const replay: JDNMessage[] = []
 
-        // 1. Players
-        this.players.forEach((p) => replay.push(p))
+        // 1. Players (from deduplicated map)
+        for (const p of this.players.values()) {
+            replay.push(p)
+        }
 
         // 2. Navigation / Tab
         if (this.state.tabRest) replay.push(this.state.tabRest)

@@ -41,23 +41,29 @@ function correctVideoTime(hostStartTime: number) {
 async function songStartSync(hostStartTime: number) {
     try {
         const waitStartTime = Date.now()
-        // @ts-ignore - accessing JDN game global
-        while (!globalThis.jd?.video?.started) {
-            if (Date.now() >= waitStartTime + 10 * 1000) {
+
+        // Wait for video to be ready.
+        // justdancenow.com uses jd.video.started; justdancenowplus.ru does not,
+        // so we also check for a video element that is actually playing.
+        while (true) {
+            if (Date.now() >= waitStartTime + 15 * 1000) {
+                console.warn("[ODP] Timed out waiting for video to start")
                 return
             }
+
+            // JDN: game global flag
+            // @ts-ignore - accessing JDN game global
+            if (globalThis.jd?.video?.started) break
+
+            // JDNP fallback: video element exists, has data, and is playing
+            const vid = findVideoElement()
+            if (vid && vid.readyState >= 2 && !vid.paused) {
+                console.log("[ODP] Video detected via element (JDNP fallback)")
+                break
+            }
+
             console.log("ODP Waiting for video to load")
             await sleep(100)
-        }
-        // Wait for the video element to appear in the DOM
-        // (may lag behind jd.video.started on justdancenowplus.ru)
-        while (!findVideoElement()) {
-            if (Date.now() >= waitStartTime + 15 * 1000) {
-                console.warn("[ODP] Timed out waiting for video element")
-                return
-            }
-            console.log("[ODP] Waiting for video element in DOM")
-            await sleep(200)
         }
         const currentVideoTime = Date.now() - hostStartTime
         if (currentVideoTime < 0) {
@@ -172,6 +178,11 @@ export class OdpWebSocket extends WebSocket {
                 } catch {
                     // Not a JDN object
                 }
+            }
+
+            // 2.5. Clean up stale UI between songs
+            if (msg) {
+                this.cleanupBetweenSongs(msg)
             }
 
             // 3. Host-specific logic
@@ -326,6 +337,35 @@ export class OdpWebSocket extends WebSocket {
                 timer: odpMsg.timer,
                 hideCancelation: odpMsg.hideCancellation,
             })
+        }
+    }
+
+    /**
+     * Clear stale game UI elements between songs.
+     * Prevents leftover scores/results from the previous song
+     * from persisting into the next one.
+     */
+    private cleanupBetweenSongs(msg: JDNMessage): void {
+        // Trigger cleanup when transitioning out of gameplay
+        const cleanupFuncs = ["songEnd", "returnToLobby", "results"]
+        if (!cleanupFuncs.includes(msg.func)) return
+
+        console.log(`[ODP] Song transition (${msg.func}) — cleaning up UI`)
+
+        try {
+            // Remove stale score popups / feedback overlays
+            document
+                .querySelectorAll(
+                    ".player-score-popup, .score-popup, .feedback-overlay",
+                )
+                .forEach((el) => el.remove())
+
+            // Remove ghost player markers from previous song
+            document.querySelectorAll(".player--new.ghost").forEach((el) => {
+                el.classList.remove("ghost", "player--new")
+            })
+        } catch (e) {
+            console.warn("[ODP] Cleanup error (non-fatal):", e)
         }
     }
 
