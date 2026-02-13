@@ -9,4 +9,3 @@ call npm run build
 
 @REM Start two browser instances for testing
 start "npm-startC" cmd /k npm run startC
-start "npm-startC" cmd /k npm run startC

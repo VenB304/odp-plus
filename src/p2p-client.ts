@@ -22,6 +22,9 @@ export class P2PClient {
     private reconnectAttempts = 0
     private syncInterval: ReturnType<typeof setInterval> | null = null
     public clockOffset = 0 // Local Time - Remote Time (Add this to Remote Time to get Local Time)
+    private recentRTTs: number[] = [] // Rolling window for outlier rejection
+    private static readonly MAX_RTT_SAMPLES = 7
+    private static readonly RTT_OUTLIER_THRESHOLD = 2.5 // reject if > 2.5x the median
 
     constructor(options: P2POptions) {
         this.options = options
@@ -194,8 +197,28 @@ export class P2PClient {
                 const serverTime = data.serverTime
 
                 const rtt = t4 - t1
+                const candidateOffset = t4 - (serverTime + rtt / 2)
 
-                this.clockOffset = t4 - (serverTime + rtt / 2)
+                // Outlier rejection: once we have enough samples,
+                // reject RTTs that are far above the median.
+                if (this.recentRTTs.length >= 3) {
+                    const sorted = [...this.recentRTTs].sort((a, b) => a - b)
+                    const median = sorted[Math.floor(sorted.length / 2)]
+                    if (rtt > median * P2PClient.RTT_OUTLIER_THRESHOLD) {
+                        console.log(
+                            `[P2P] Sync outlier rejected. RTT: ${rtt}ms (median: ${median}ms). Keeping offset: ${this.clockOffset}ms`,
+                        )
+                        return
+                    }
+                }
+
+                // Keep a rolling window of recent RTTs
+                this.recentRTTs.push(rtt)
+                if (this.recentRTTs.length > P2PClient.MAX_RTT_SAMPLES) {
+                    this.recentRTTs.shift()
+                }
+
+                this.clockOffset = candidateOffset
                 console.log(
                     `[P2P] Sync Complete. RTT: ${rtt}ms, Clock Delta: ${this.clockOffset}ms`,
                 )

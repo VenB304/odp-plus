@@ -306,12 +306,21 @@ export class OdpWebSocket extends WebSocket {
             const hostRegionName = getJDNRegion(odpMsg.region).humanReadable
             const localRegionName = localRegion.humanReadable
 
-            // @ts-ignore - accessing JDN game global
-            globalThis.jd.popUp.build({
-                title: "VPN Required",
-                content: `The host is connected to the Just Dance server in ${hostRegionName} while you are connected to the Just Dance Server in ${localRegionName}. To be able to join the Dance Room with your phone, you will need to use a VPN app with a VPN server close to the server of the host. Otherwise, you will get an error message that says that the dance room does not exist.`,
-                isError: false,
-            })
+            const showVPNWarning = () => {
+                // @ts-ignore - accessing JDN game global
+                if (globalThis.jd?.popUp?.build) {
+                    // @ts-ignore - accessing JDN game global
+                    globalThis.jd.popUp.build({
+                        title: "VPN Required",
+                        content: `The host is connected to the Just Dance server in ${hostRegionName} while you are connected to the Just Dance Server in ${localRegionName}. To be able to join the Dance Room with your phone, you will need to use a VPN app with a VPN server close to the server of the host. Otherwise, you will get an error message that says that the dance room does not exist.`,
+                        isError: false,
+                    })
+                } else {
+                    // JDN UI not ready yet, retry after a short delay
+                    setTimeout(showVPNWarning, 1000)
+                }
+            }
+            showVPNWarning()
         }
     }
 
