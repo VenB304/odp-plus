@@ -55,6 +55,14 @@ Scoring is handled by your **phone** (connects directly to JDN) — ODP+ syncs t
 - Therefore, follower video is also aligned with JDN timing
 - Phone expects moves at JDN timing — which now matches the video ✅
 
+### Clock Sync Details
+
+- **Initial sync**: 5 ping messages during P2P handshake + real RTT measurement via `__rttProbe`/`__rttEcho`
+- **Periodic re-sync**: Every 30 seconds to prevent clock drift
+- **Outlier rejection**: RTT measurements > 2.5× the rolling median are discarded
+- **Median offset**: Uses the median of the last 7 offset samples instead of the raw latest value, preventing jitter from corrupting sync
+- **Handshake latency**: The `clientSyncCompleted` message uses the **measured RTT** to each peer (not a hardcoded value), ensuring the JDN game engine calibrates move timing correctly for high-latency connections
+
 ---
 
 ## Performance Limits
@@ -135,9 +143,9 @@ ODP+/
 │   ├── validation.ts           # Input & message validation
 │   ├── odp-msg.ts              # ODP protocol message types
 │   ├── jdn-protocol.ts         # JDN WebSocket protocol helpers
-│   ├── redirect.ts             # WebSocket constructor override
+│   ├── redirect.ts             # WebSocket override & JDNP CDN rewriting
 │   ├── inject-redirect.ts      # Content script injector
-│   ├── storage.ts              # Browser storage abstraction
+│   ├── storage.ts              # Browser storage (mode, CDN pref)
 │   ├── utils.ts                # Utilities (sleep, region detection)
 │   └── wait-for-elem.ts        # DOM element observer
 ├── dist/                       # Built extension (generated)
@@ -147,16 +155,48 @@ ODP+/
 
 ---
 
+## JDNP CDN Override
+
+JustDanceNowPlus.ru streams video from two CDN servers:
+
+| CDN Hostname | Location |
+|---|---|
+| `hls-us.justdancenowplus.ru` | United States |
+| `hls-ru.justdancenowplus.ru` | Russia (St. Petersburg) |
+
+The JDNP server assigns a CDN based on your IP address, but this isn't always optimal (e.g., a Philippines user may get `hls-us`, causing stream failures due to high latency).
+
+ODP+ can override the CDN assignment:
+
+| Setting | Behavior |
+|---------|----------|
+| **Server Default** | No interception — uses whatever JDNP assigns |
+| **Auto (fastest)** | Pings both CDNs on page load, picks the one that responds first |
+| **US CDN** | Forces `hls-us.justdancenowplus.ru` |
+| **Russia CDN** | Forces `hls-ru.justdancenowplus.ru` |
+
+**How it works:** ODP+ intercepts `XMLHttpRequest.open()` and `fetch()` calls to rewrite CDN hostnames in HLS video requests (`.m3u8` manifests and `.ts` segments). This only activates on `justdancenowplus.ru`.
+
+The setting is available in the ODP+ popup under the collapsible "JDNP Video CDN" section and persists across sessions.
+
+---
+
 ## Supported Sites
 
 | Site | Status |
 |------|--------|
 | [justdancenow.com](https://justdancenow.com) | ✅ Supported |
-| [justdancenowplus.ru](https://justdancenowplus.ru) | ⚠️ Partial |
+| [justdancenowplus.ru](https://justdancenowplus.ru) | ⚠️ Partial (see below) |
 
 **JustDanceNow+ Compatibility:**
 - ✅ OurUI (2024), 2024, 2020, Experiments
 - ❌ 2018, 2017, 2015
+
+**JDNP-Specific Behavior:**
+- Video detection uses `document.querySelector("video")` fallback (JDNP doesn't use jQuery `#in-game_video`)
+- Song start detection falls back to checking video element `readyState >= 2 && !paused` (JDNP doesn't set `jd.video.started`)
+- VPN warning popup defers display until `jd.popUp` is initialized (may not be ready during early P2P handshake)
+- CDN override available to work around JDNP's suboptimal CDN assignment for distant users
 
 ---
 

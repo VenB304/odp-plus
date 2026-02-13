@@ -77,6 +77,46 @@
                     </button>
                 </div>
 
+                <!-- JDNP CDN Setting -->
+                <details class="cdn-settings" id="cdn-settings">
+                    <summary class="cdn-summary">JDNP Video CDN</summary>
+                    <div class="cdn-options">
+                        <label class="cdn-option">
+                            <input
+                                type="radio"
+                                name="cdn"
+                                value="default"
+                                checked
+                            />
+                            <span>Server Default</span>
+                        </label>
+                        <label class="cdn-option">
+                            <input type="radio" name="cdn" value="auto" />
+                            <span>Auto (fastest)</span>
+                        </label>
+                        <label class="cdn-option">
+                            <input
+                                type="radio"
+                                name="cdn"
+                                value="hls-us.justdancenowplus.ru"
+                            />
+                            <span>US CDN</span>
+                        </label>
+                        <label class="cdn-option">
+                            <input
+                                type="radio"
+                                name="cdn"
+                                value="hls-ru.justdancenowplus.ru"
+                            />
+                            <span>Russia CDN</span>
+                        </label>
+                    </div>
+                    <button type="button" id="cdn-apply" class="cdn-apply-btn">
+                        Save CDN
+                    </button>
+                    <div id="cdn-status" class="cdn-status hidden"></div>
+                </details>
+
                 <div id="status-message" class="status-message hidden"></div>
             </form>
 

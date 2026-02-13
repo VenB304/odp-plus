@@ -19,18 +19,30 @@ Known region prefixes:
 
 ## Just Dance Now Plus (justdancenowplus.ru)
 
-Unlike justdancenow.com, this site uses a single domain without regional prefixes:
+Unlike justdancenow.com, this site uses a single WebSocket domain without regional prefixes:
 
 ```
 wss://drs.justdancenowplus.ru/screen
 ```
 
-| Server | Status |
-|--------|--------|
-| Russia | Active |
-| Brazil | Unknown |
+### API Servers
 
-> justdancenowplus.ru is a third-party service. 
-> Server availability may change — check their Discord for current status.
+| Hostname | Location |
+|----------|----------|
+| `drs.justdancenowplus.ru` | Russia (Moscow) |
+| (Brazil endpoint) | Brazil |
+
+### CDN Servers (HLS Video)
+
+| Hostname | Location |
+|----------|----------|
+| `hls-us.justdancenowplus.ru` | United States |
+| `hls-ru.justdancenowplus.ru` | Russia (St. Petersburg) |
+
+The API server assigns a CDN based on client IP. ODP+ can override this assignment — see [TECHNICAL.md](TECHNICAL.md#jdnp-cdn-override) for details.
+
+> justdancenowplus.ru is a third-party service.
+> Server availability may change — check their [Discord](https://discord.gg/Suzt9h4Eck) for current status.
+> Server locations sourced from [justdancenowplus.ru/dynamic-map](https://justdancenowplus.ru/dynamic-map/).
 
 ---

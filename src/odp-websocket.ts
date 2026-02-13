@@ -404,6 +404,22 @@ export class OdpWebSocket extends WebSocket {
     }
 
     private handleP2PData(data: unknown, _peerId: string): void {
+        // Handle RTT echo for handshake latency measurement (host only)
+        if (
+            this.isHost &&
+            data != null &&
+            typeof data === "object" &&
+            "__type" in data &&
+            (data as { __type: string }).__type === "__rttEcho" &&
+            "t1" in data
+        ) {
+            this.orchestrator?.handleRTTEcho(
+                data as { __type: string; t1: number },
+                _peerId,
+            )
+            return
+        }
+
         // Handle forwarded messages from followers (host only)
         if (
             this.isHost &&

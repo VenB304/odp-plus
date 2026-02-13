@@ -19,6 +19,7 @@ export class P2POrchestrator {
     private initializingPeers = new Set<string>()
     private peersWaitingForSong = new Set<string>()
     private cachedRegisterRoomMsg: JDNMessage | null = null
+    private pendingRTTProbes = new Map<string, (t1: number) => void>()
     private config: OrchestratorConfig
 
     constructor(config: OrchestratorConfig) {
@@ -145,6 +146,20 @@ export class P2POrchestrator {
     }
 
     /**
+     * Handle RTT echo response from a peer during handshake.
+     * Called from the P2P data handler when __rttEcho is received.
+     */
+    public handleRTTEcho(
+        data: { __type: string; t1: number },
+        peerId: string,
+    ): void {
+        const handler = this.pendingRTTProbes.get(peerId)
+        if (handler) {
+            handler(data.t1)
+        }
+    }
+
+    /**
      * Check if a peer is still connected before sending.
      * Used by the handshake sequence to abort if peer disconnected.
      */
@@ -168,12 +183,39 @@ export class P2POrchestrator {
         return true
     }
 
+    private sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+
+    /**
+     * Measure RTT to a peer by sending an __rttProbe and waiting for
+     * the __rttEcho response. Falls back to 100ms on timeout.
+     */
+    private measurePeerRTT(peerId: string): Promise<number> {
+        return new Promise<number>((resolve) => {
+            const t1 = Date.now()
+            const timeout = setTimeout(() => {
+                this.pendingRTTProbes.delete(peerId)
+                console.warn("[ODP] RTT probe timed out, using fallback 100ms")
+                resolve(100)
+            }, 2000)
+
+            this.pendingRTTProbes.set(peerId, (echoT1: number) => {
+                clearTimeout(timeout)
+                this.pendingRTTProbes.delete(peerId)
+                resolve(Date.now() - echoT1)
+            })
+
+            this.p2pClient?.sendTo(peerId, { __type: "__rttProbe", t1 })
+        })
+    }
+
     /**
      * Handle new peer connection (host only).
-     * Adds an initial stabilization delay to let the RTCDataChannel
-     * fully open before sending handshake messages.
+     * Measures actual RTT to the peer for accurate sync calibration
+     * and replays game state for late joiners.
      */
-    private handleNewPeerConnection(peerId: string): void {
+    private async handleNewPeerConnection(peerId: string): Promise<void> {
         console.log("[ODP] New Peer Connected: " + peerId)
 
         if (!this.cachedRegisterRoomMsg) {
@@ -184,114 +226,102 @@ export class P2POrchestrator {
         console.log("[ODP] Starting handshake sequence for peer: " + peerId)
         this.initializingPeers.add(peerId)
 
-        // Initial stabilization delay — let RTCDataChannel fully settle
-        // before sending any data. Prevents "readyState is not open" errors
-        // on high-latency connections.
-        let delay = 500
-
-        // 1. Clock Sync (5 pings)
-        const now = Date.now()
-        for (let i = 0; i < 5; i++) {
-            setTimeout(
-                () => {
-                    this.safeSendTo(peerId, {
-                        func: "sync",
-                        sync: {
-                            o: now + i * 100,
-                            r: 0,
-                            t: 0,
-                            d: 0,
-                        },
-                    })
-                },
-                (delay += 100),
-            )
+        // 0. Stabilization delay — let RTCDataChannel fully settle
+        await this.sleep(500)
+        if (!this.isPeerAlive(peerId)) {
+            this.initializingPeers.delete(peerId)
+            return
         }
 
-        // 2. Sync Complete
-        setTimeout(
-            () => {
-                this.safeSendTo(peerId, {
-                    func: "clientSyncCompleted",
-                    latency: 50,
-                    clockOffset: 0,
-                    scoringWindowWidth: 1,
-                    serverTime: Date.now(),
+        // 1. Measure actual RTT to peer for sync calibration
+        const measuredRTT = await this.measurePeerRTT(peerId)
+        const latency = Math.round(measuredRTT / 2)
+        console.log(
+            `[ODP] Measured RTT to ${peerId}: ${measuredRTT}ms (latency: ${latency}ms)`,
+        )
+
+        // 2. JDN Sync Pings
+        const now = Date.now()
+        for (let i = 0; i < 5; i++) {
+            await this.sleep(100)
+            if (
+                !this.safeSendTo(peerId, {
+                    func: "sync",
+                    sync: { o: now + i * 100, r: 0, t: 0, d: 0 },
                 })
-            },
-            (delay += 100),
-        )
-
-        // 3. RegisterRoom
-        setTimeout(
-            () => {
-                if (this.cachedRegisterRoomMsg) {
-                    this.safeSendTo(peerId, this.cachedRegisterRoomMsg)
-                }
-            },
-            (delay += 100),
-        )
-
-        // 4. Connected (ODP message)
-        setTimeout(
-            () => {
-                if (this.cachedRegisterRoomMsg) {
-                    const roomId =
-                        this.cachedRegisterRoomMsg.roomID ||
-                        this.cachedRegisterRoomMsg.roomNumber
-                    const wsUrl = this.config.getWebSocketUrl()
-                    this.safeSendTo(
-                        peerId,
-                        "06BJ" +
-                            JSON.stringify({
-                                tag: "Connected",
-                                contents: {
-                                    hostId: roomId.toString(),
-                                    region: getJDNRegion(wsUrl).regionCode,
-                                },
-                            }),
-                    )
-                }
-            },
-            (delay += 100),
-        )
-
-        // 5. Replay Game State
-        setTimeout(() => {
-            if (!this.isPeerAlive(peerId)) {
-                console.warn(`[ODP] Peer ${peerId} disconnected before replay`)
-                this.initializingPeers.delete(peerId)
-                return
-            }
-
-            const replayMsgs = this.gameState.getReplayMessages()
-            console.log(
-                `[ODP] Replaying ${replayMsgs.length} state messages to ${peerId}`,
             )
+                return
+        }
 
-            // Track late joiners
-            if (this.gameState.isMidSong) {
-                console.log(
-                    `[ODP] Peer ${peerId} joined mid-song, will wait for song to end`,
+        // 3. Sync Complete — use measured latency instead of hardcoded value
+        await this.sleep(100)
+        if (
+            !this.safeSendTo(peerId, {
+                func: "clientSyncCompleted",
+                latency: latency,
+                clockOffset: 0,
+                scoringWindowWidth: 1,
+                serverTime: Date.now(),
+            })
+        )
+            return
+
+        // 4. RegisterRoom
+        await this.sleep(100)
+        if (this.cachedRegisterRoomMsg) {
+            if (!this.safeSendTo(peerId, this.cachedRegisterRoomMsg)) return
+        }
+
+        // 5. Connected (ODP message)
+        await this.sleep(100)
+        if (this.cachedRegisterRoomMsg) {
+            const roomId =
+                this.cachedRegisterRoomMsg.roomID ||
+                this.cachedRegisterRoomMsg.roomNumber
+            const wsUrl = this.config.getWebSocketUrl()
+            if (
+                !this.safeSendTo(
+                    peerId,
+                    "06BJ" +
+                        JSON.stringify({
+                            tag: "Connected",
+                            contents: {
+                                hostId: roomId.toString(),
+                                region: getJDNRegion(wsUrl).regionCode,
+                            },
+                        }),
                 )
-                this.peersWaitingForSong.add(peerId)
-            }
+            )
+                return
+        }
 
-            let replayDelay = 0
-            for (const msg of replayMsgs) {
-                setTimeout(
-                    () => {
-                        this.safeSendTo(peerId, msg)
-                    },
-                    (replayDelay += 200),
-                )
-            }
+        // 6. Replay Game State
+        await this.sleep(400)
+        if (!this.isPeerAlive(peerId)) {
+            console.warn(`[ODP] Peer ${peerId} disconnected before replay`)
+            this.initializingPeers.delete(peerId)
+            return
+        }
 
-            // Mark initialization complete
-            setTimeout(() => {
-                console.log("[ODP] Peer Initialization Complete: " + peerId)
-                this.initializingPeers.delete(peerId)
-            }, replayDelay + 1000)
-        }, delay + 400)
+        const replayMsgs = this.gameState.getReplayMessages()
+        console.log(
+            `[ODP] Replaying ${replayMsgs.length} state messages to ${peerId}`,
+        )
+
+        if (this.gameState.isMidSong) {
+            console.log(
+                `[ODP] Peer ${peerId} joined mid-song, will wait for song to end`,
+            )
+            this.peersWaitingForSong.add(peerId)
+        }
+
+        for (const msg of replayMsgs) {
+            await this.sleep(200)
+            this.safeSendTo(peerId, msg)
+        }
+
+        await this.sleep(1000)
+        console.log("[ODP] Peer Initialization Complete: " + peerId)
+        this.initializingPeers.delete(peerId)
     }
 }

@@ -2,6 +2,7 @@ export class InjectData {
     constructor(
         public redirectData: RedirectData | null,
         public odpTag: string | null,
+        public cdnPreference: string | null = null,
     ) {}
 }
 

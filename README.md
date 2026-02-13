@@ -105,6 +105,7 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
 | 🎥 **Video is out of sync** | Ask the host to use a wired internet connection instead of WiFi |
 | 🔌 **Can't connect to host** | Try using your phone's hotspot as internet, or check if your network blocks peer connections |
 | ⏳ **Joined late and stuck in lobby** | This is normal! Wait for the current song to finish, then you'll sync for the next one |
+| 🎬 **JDNP video won't start / freezes** | Open ODP+ popup → expand "JDNP Video CDN" → try "Auto" or switch CDN manually |
 | ❌ **INSTALL.bat doesn't work** | Make sure you have internet. If Node.js fails to install, download it manually from [nodejs.org](https://nodejs.org) |
 
 ---
@@ -114,7 +115,9 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
 | Site | Works? |
 |------|--------|
 | [justdancenow.com](https://justdancenow.com) | ✅ Yes! |
-| [justdancenowplus.ru](https://justdancenowplus.ru) | ⚠️ Some versions only |
+| [justdancenowplus.ru](https://justdancenowplus.ru) | ⚠️ Some versions only (OurUI, 2024, 2020, Experiments) |
+
+> **JDNP users:** If video fails to load or freezes mid-song, try changing the CDN setting in the ODP+ popup. See [docs/TECHNICAL.md](docs/TECHNICAL.md#jdnp-cdn-override) for details.
 
 ---
 

@@ -23,6 +23,7 @@ export class P2PClient {
     private syncInterval: ReturnType<typeof setInterval> | null = null
     public clockOffset = 0 // Local Time - Remote Time (Add this to Remote Time to get Local Time)
     private recentRTTs: number[] = [] // Rolling window for outlier rejection
+    private recentOffsets: number[] = [] // Stable median-based offset
     private static readonly MAX_RTT_SAMPLES = 7
     private static readonly RTT_OUTLIER_THRESHOLD = 2.5 // reject if > 2.5x the median
 
@@ -218,10 +219,26 @@ export class P2PClient {
                     this.recentRTTs.shift()
                 }
 
-                this.clockOffset = candidateOffset
+                // Use median of recent offsets for stability against jitter
+                this.recentOffsets.push(candidateOffset)
+                if (this.recentOffsets.length > P2PClient.MAX_RTT_SAMPLES) {
+                    this.recentOffsets.shift()
+                }
+                const sortedOffsets = [...this.recentOffsets].sort(
+                    (a, b) => a - b,
+                )
+                this.clockOffset =
+                    sortedOffsets[Math.floor(sortedOffsets.length / 2)]
+
                 console.log(
                     `[P2P] Sync Complete. RTT: ${rtt}ms, Clock Delta: ${this.clockOffset}ms`,
                 )
+                return
+            }
+
+            // Echo RTT probes back to sender (for handshake latency measurement)
+            if (isP2PMessage(data) && data.__type === "__rttProbe") {
+                conn.send({ __type: "__rttEcho", t1: data.t1 })
                 return
             }
 

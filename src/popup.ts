@@ -24,6 +24,10 @@ const radioDisabled = "Disabled"
 const radioHost = "Host"
 const radioFollower = "Follower"
 
+const cdnRadio = form.elements.namedItem("cdn") as RadioNodeList
+const cdnApplyBtn = document.getElementById("cdn-apply") as HTMLButtonElement
+const cdnStatus = document.getElementById("cdn-status") as HTMLDivElement
+
 async function updateUI() {
     const radioValue = radio.value
     if (radioValue === radioFollower) {
@@ -62,6 +66,14 @@ function registerHandlers() {
         // Clear error styling as the user types
         statusMessage.classList.add("hidden")
         followCodeField.placeholder = "e.g. 1999"
+    })
+
+    cdnApplyBtn.addEventListener("click", async () => {
+        const selected = cdnRadio.value
+        await storage.setCdnPreference(selected)
+        cdnStatus.textContent = "Saved! Reload the page to apply."
+        cdnStatus.classList.remove("hidden")
+        setTimeout(() => cdnStatus.classList.add("hidden"), 3000)
     })
 
     form.onsubmit = async function (this: GlobalEventHandlers, e: Event) {
@@ -127,6 +139,10 @@ async function main(): Promise<void> {
 
     radio.value = radioValue
     await updateUI()
+
+    // Load CDN preference
+    const cdnPref = await storage.getCdnPreference()
+    cdnRadio.value = cdnPref || "default"
 }
 
 main()

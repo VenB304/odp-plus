@@ -59,3 +59,14 @@ export async function getSavedHostId(): Promise<string | undefined> {
 export async function getSavedFollowerId(): Promise<string | undefined> {
     return (await storage.get(followerIdKey))[followerIdKey]
 }
+
+const cdnKey = "cdnPreference"
+
+export async function getCdnPreference(): Promise<string> {
+    const val = (await storage.get(cdnKey))[cdnKey]
+    return typeof val === "string" ? val : "auto"
+}
+
+export async function setCdnPreference(pref: string): Promise<void> {
+    return await storage.set({ [cdnKey]: pref })
+}
