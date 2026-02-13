@@ -239,6 +239,34 @@ input {
     opacity: 1;
 }
 
+.current-mode {
+    margin-bottom: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.current-mode.mode-host {
+    background-color: color-mix(in srgb, #4caf50 20%, var(--card-bg));
+    color: #4caf50;
+    border: 1px solid #4caf50;
+}
+
+.current-mode.mode-follower {
+    background-color: color-mix(in srgb, #2196f3 20%, var(--card-bg));
+    color: #2196f3;
+    border: 1px solid #2196f3;
+}
+
+.current-mode.mode-disabled {
+    background-color: color-mix(in srgb, var(--border) 20%, var(--card-bg));
+    color: var(--text);
+    opacity: 0.6;
+    border: 1px solid var(--border);
+}
+
 .hidden {
     display: none;
 }

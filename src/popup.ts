@@ -16,16 +16,26 @@ const inputSection = document.getElementById(
     "follower-input-section",
 ) as HTMLDivElement
 const radio = form.elements.namedItem("setting") as RadioNodeList
+const statusMessage = document.getElementById(
+    "status-message",
+) as HTMLDivElement
 
 const radioDisabled = "Disabled"
 const radioHost = "Host"
 const radioFollower = "Follower"
 
-function updateUI() {
+async function updateUI() {
     const radioValue = radio.value
     if (radioValue === radioFollower) {
         inputSection.classList.remove("hidden")
         followCodeField.disabled = false
+        // Restore previously saved follower Room ID if field is empty
+        if (!followCodeField.value) {
+            const savedId = await storage.getSavedFollowerId()
+            if (savedId) {
+                followCodeField.value = savedId
+            }
+        }
         followCodeField.focus()
     } else {
         inputSection.classList.add("hidden")
@@ -33,9 +43,25 @@ function updateUI() {
     }
 }
 
+function showStatus(message: string, autoHide = false) {
+    statusMessage.textContent = message
+    statusMessage.classList.remove("hidden")
+    if (autoHide) {
+        setTimeout(() => {
+            statusMessage.classList.add("hidden")
+        }, 3000)
+    }
+}
+
 function registerHandlers() {
     radio.forEach((r) => {
-        r.addEventListener("change", updateUI)
+        r.addEventListener("change", () => updateUI())
+    })
+
+    followCodeField.addEventListener("input", () => {
+        // Clear error styling as the user types
+        statusMessage.classList.add("hidden")
+        followCodeField.placeholder = "e.g. 1999"
     })
 
     form.onsubmit = async function (this: GlobalEventHandlers, e: Event) {
@@ -43,9 +69,6 @@ function registerHandlers() {
         await storage.removeServer() // Ensure no legacy server config
 
         const radioValue = radio.value
-        const statusMessage = document.getElementById(
-            "status-message",
-        ) as HTMLDivElement
 
         if (radioValue === "" || radioValue === radioDisabled) {
             await storage.removeODPClient()
@@ -54,18 +77,20 @@ function registerHandlers() {
             await storage.setODPClient(new ODPClient(new Host("ODP-Host")))
 
             // Show message to Host before reloading
-            statusMessage.textContent =
-                "Page will reload. Share your Room Code with friends to let them join!"
-            statusMessage.classList.remove("hidden")
+            showStatus(
+                "Page will reload. Share your Room Code with friends to let them join!",
+            )
             await new Promise((resolve) => setTimeout(resolve, 1500))
         } else if (radioValue == radioFollower) {
             const code = followCodeField.value.trim()
             if (!code || !isValidRoomId(code)) {
                 followCodeField.placeholder = "REQUIRED!"
-                statusMessage.textContent = code
-                    ? "Room ID must be alphanumeric (1-20 chars)"
-                    : "Please enter a Room ID"
-                statusMessage.classList.remove("hidden")
+                showStatus(
+                    code
+                        ? "Room ID must be alphanumeric (1-20 chars)"
+                        : "Please enter a Room ID",
+                    true,
+                )
                 return
             }
             await storage.setODPClient(new ODPClient(new Follower(code)))
@@ -80,18 +105,28 @@ async function main(): Promise<void> {
 
     const odpClient = await storage.getODPClient()
     let radioValue: string
+    const modeIndicator = document.getElementById(
+        "current-mode",
+    ) as HTMLDivElement
 
     if (odpClient == undefined) {
         radioValue = radioDisabled
+        modeIndicator.textContent = "● ODP+ Disabled"
+        modeIndicator.className = "current-mode mode-disabled"
     } else if (odpClient.contents instanceof Host) {
         radioValue = radioHost
+        modeIndicator.textContent = "● Hosting"
+        modeIndicator.className = "current-mode mode-host"
     } else {
         followCodeField.value = odpClient.contents.hostToFollow
         radioValue = radioFollower
+        modeIndicator.textContent =
+            "● Following: " + odpClient.contents.hostToFollow
+        modeIndicator.className = "current-mode mode-follower"
     }
 
     radio.value = radioValue
-    updateUI()
+    await updateUI()
 }
 
 main()

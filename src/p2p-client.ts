@@ -19,6 +19,8 @@ export class P2PClient {
     private connections: Map<string, DataConnection> = new Map()
     private options: P2POptions
     private initialized = false
+    private reconnectAttempts = 0
+    private syncInterval: ReturnType<typeof setInterval> | null = null
     public clockOffset = 0 // Local Time - Remote Time (Add this to Remote Time to get Local Time)
 
     constructor(options: P2POptions) {
@@ -33,6 +35,24 @@ export class P2PClient {
 
         const t1 = Date.now()
         this.sendTo(hostId, { __type: "__ping", t1 })
+    }
+
+    public startPeriodicSync(intervalMs = 30000) {
+        if (this.options.isHost) return
+        if (this.syncInterval != null) return
+        this.syncInterval = setInterval(() => {
+            if (this.connections.size > 0) {
+                console.log("[P2P] Periodic clock re-sync...")
+                this.syncClock()
+            }
+        }, intervalMs)
+    }
+
+    public stopPeriodicSync() {
+        if (this.syncInterval != null) {
+            clearInterval(this.syncInterval)
+            this.syncInterval = null
+        }
     }
 
     private getPeerId(): string {
@@ -100,18 +120,30 @@ export class P2PClient {
     private connectToHost(retryCount = 0) {
         if (!this.peer) return
         const hostId = this.getPeerId()
-        console.log(`[P2P] Connecting to Host: ${hostId}`)
+        const maxRetries = 8
+        // Exponential backoff: 3s, 4.5s, 6.75s, ~10s, ~15s, ~22s, ~34s, ~50s (capped at 60s)
+        const delay = Math.min(3000 * Math.pow(1.5, retryCount), 60000)
+
+        console.log(
+            `[P2P] Connecting to Host: ${hostId} (attempt ${retryCount + 1}/${maxRetries})`,
+        )
 
         const conn = this.peer.connect(hostId, {
             reliable: true,
         })
 
-        // Simple connection timeout/retry
+        // Connection timeout with exponential backoff retry
         const connectionTimeout = setTimeout(() => {
-            if (!conn.open && retryCount < 5) {
-                console.log("[P2P] Connection timed out, retrying...")
+            if (!conn.open && retryCount < maxRetries) {
+                console.log(
+                    `[P2P] Connection timed out, retrying in ${Math.round(delay / 1000)}s...`,
+                )
                 conn.close()
                 this.connectToHost(retryCount + 1)
+            } else if (retryCount >= maxRetries) {
+                console.error(
+                    "[P2P] Max retries reached. Could not connect to host.",
+                )
             }
         }, 5000)
 
@@ -126,6 +158,7 @@ export class P2PClient {
         conn.on("open", () => {
             console.log(`[P2P] Connection opened with: ${conn.peer}`)
             this.connections.set(conn.peer, conn)
+            this.reconnectAttempts = 0 // Reset reconnect counter on successful connection
 
             if (isIncoming) {
                 this.trigger("connection", conn.peer)
@@ -188,12 +221,17 @@ export class P2PClient {
         conn.on("close", () => {
             console.log(`[P2P] Connection closed: ${conn.peer}`)
             this.connections.delete(conn.peer)
-            // If we are follower and lost host, maybe try to reconnect?
+            // If we are follower and lost host, reconnect with backoff
             if (!this.options.isHost && !isIncoming) {
-                console.log(
-                    "[P2P] Lost connection to Host. Attempting reconnect in 3s...",
+                const delay = Math.min(
+                    3000 * Math.pow(1.5, this.reconnectAttempts),
+                    60000,
                 )
-                setTimeout(() => this.connectToHost(), 3000)
+                this.reconnectAttempts++
+                console.log(
+                    `[P2P] Lost connection to Host. Attempting reconnect in ${Math.round(delay / 1000)}s... (attempt ${this.reconnectAttempts})`,
+                )
+                setTimeout(() => this.connectToHost(), delay)
             }
         })
 
