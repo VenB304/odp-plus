@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/VenB304/odp-plus/compare/v1.3.1...v1.3.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* improve peer connection stability and handshake safety ([fca884c](https://github.com/VenB304/odp-plus/commit/fca884c192d94a47f27ee3399adefddbf03180e9)), closes [hi#latency](https://github.com/hi/issues/latency)
+
 ## [1.3.1](https://github.com/VenB304/odp-plus/compare/v1.3.0...v1.3.1) (2026-02-13)
 
 # [1.3.0](https://github.com/VenB304/odp-plus/compare/v1.2.4...v1.3.0) (2026-02-13)
