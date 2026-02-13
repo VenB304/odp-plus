@@ -15,9 +15,21 @@ import { JDNMessage } from "./model/GameStateManager"
 import { P2POrchestrator } from "./P2POrchestrator"
 import { safeJsonParse } from "./validation"
 
+function findVideoElement(): HTMLVideoElement | null {
+    // @ts-ignore - accessing JDN game global (justdancenow.com)
+    const jdnVideo = $("#in-game_video")[0] as HTMLVideoElement | undefined
+    if (jdnVideo) return jdnVideo
+
+    // Fallback for justdancenowplus.ru and other sites
+    return document.querySelector("video")
+}
+
 function correctVideoTime(hostStartTime: number) {
-    // @ts-ignore - accessing JDN game global
-    const video = $("#in-game_video")[0]
+    const video = findVideoElement()
+    if (!video) {
+        console.warn("[ODP] No video element found for sync")
+        return
+    }
     const currentPosition = video.currentTime * 1000
     const hostVideoTime = Date.now() - hostStartTime
     video.currentTime = hostVideoTime / 1000
@@ -30,12 +42,22 @@ async function songStartSync(hostStartTime: number) {
     try {
         const waitStartTime = Date.now()
         // @ts-ignore - accessing JDN game global
-        while (!globalThis.jd.video.started) {
+        while (!globalThis.jd?.video?.started) {
             if (Date.now() >= waitStartTime + 10 * 1000) {
                 return
             }
             console.log("ODP Waiting for video to load")
             await sleep(100)
+        }
+        // Wait for the video element to appear in the DOM
+        // (may lag behind jd.video.started on justdancenowplus.ru)
+        while (!findVideoElement()) {
+            if (Date.now() >= waitStartTime + 15 * 1000) {
+                console.warn("[ODP] Timed out waiting for video element")
+                return
+            }
+            console.log("[ODP] Waiting for video element in DOM")
+            await sleep(200)
         }
         const currentVideoTime = Date.now() - hostStartTime
         if (currentVideoTime < 0) {

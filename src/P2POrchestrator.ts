@@ -145,7 +145,33 @@ export class P2POrchestrator {
     }
 
     /**
+     * Check if a peer is still connected before sending.
+     * Used by the handshake sequence to abort if peer disconnected.
+     */
+    private isPeerAlive(peerId: string): boolean {
+        return this.p2pClient?.isPeerConnected(peerId) ?? false
+    }
+
+    /**
+     * Send data to a peer, but only if still connected.
+     * Returns false if the peer has disconnected.
+     */
+    private safeSendTo(peerId: string, data: unknown): boolean {
+        if (!this.isPeerAlive(peerId)) {
+            console.warn(
+                `[ODP] Peer ${peerId} disconnected, aborting handshake send`,
+            )
+            this.initializingPeers.delete(peerId)
+            return false
+        }
+        this.p2pClient?.sendTo(peerId, data)
+        return true
+    }
+
+    /**
      * Handle new peer connection (host only).
+     * Adds an initial stabilization delay to let the RTCDataChannel
+     * fully open before sending handshake messages.
      */
     private handleNewPeerConnection(peerId: string): void {
         console.log("[ODP] New Peer Connected: " + peerId)
@@ -158,14 +184,17 @@ export class P2POrchestrator {
         console.log("[ODP] Starting handshake sequence for peer: " + peerId)
         this.initializingPeers.add(peerId)
 
-        let delay = 0
+        // Initial stabilization delay — let RTCDataChannel fully settle
+        // before sending any data. Prevents "readyState is not open" errors
+        // on high-latency connections.
+        let delay = 500
 
         // 1. Clock Sync (5 pings)
         const now = Date.now()
         for (let i = 0; i < 5; i++) {
             setTimeout(
                 () => {
-                    this.p2pClient?.sendTo(peerId, {
+                    this.safeSendTo(peerId, {
                         func: "sync",
                         sync: {
                             o: now + i * 100,
@@ -182,7 +211,7 @@ export class P2POrchestrator {
         // 2. Sync Complete
         setTimeout(
             () => {
-                this.p2pClient?.sendTo(peerId, {
+                this.safeSendTo(peerId, {
                     func: "clientSyncCompleted",
                     latency: 50,
                     clockOffset: 0,
@@ -197,7 +226,7 @@ export class P2POrchestrator {
         setTimeout(
             () => {
                 if (this.cachedRegisterRoomMsg) {
-                    this.p2pClient?.sendTo(peerId, this.cachedRegisterRoomMsg)
+                    this.safeSendTo(peerId, this.cachedRegisterRoomMsg)
                 }
             },
             (delay += 100),
@@ -211,7 +240,7 @@ export class P2POrchestrator {
                         this.cachedRegisterRoomMsg.roomID ||
                         this.cachedRegisterRoomMsg.roomNumber
                     const wsUrl = this.config.getWebSocketUrl()
-                    this.p2pClient?.sendTo(
+                    this.safeSendTo(
                         peerId,
                         "06BJ" +
                             JSON.stringify({
@@ -229,6 +258,12 @@ export class P2POrchestrator {
 
         // 5. Replay Game State
         setTimeout(() => {
+            if (!this.isPeerAlive(peerId)) {
+                console.warn(`[ODP] Peer ${peerId} disconnected before replay`)
+                this.initializingPeers.delete(peerId)
+                return
+            }
+
             const replayMsgs = this.gameState.getReplayMessages()
             console.log(
                 `[ODP] Replaying ${replayMsgs.length} state messages to ${peerId}`,
@@ -246,7 +281,7 @@ export class P2POrchestrator {
             for (const msg of replayMsgs) {
                 setTimeout(
                     () => {
-                        this.p2pClient?.sendTo(peerId, msg)
+                        this.safeSendTo(peerId, msg)
                     },
                     (replayDelay += 200),
                 )

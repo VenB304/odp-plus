@@ -260,6 +260,11 @@ export class P2PClient {
             conn.send(data)
         }
     }
+
+    public isPeerConnected(peerId: string): boolean {
+        const conn = this.connections.get(peerId)
+        return conn != null && conn.open
+    }
     public on(event: string, callback: (data?: unknown) => void) {
         if (event === "connect") {
             this.callbacks.connect.push(callback)
