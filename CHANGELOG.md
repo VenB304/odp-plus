@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/VenB304/odp-plus/compare/v1.4.0...v1.5.0) (2026-02-13)
+
+
+### Features
+
+* add technical docs and clarify scoring unaffected by ODP+ ([1d5e538](https://github.com/VenB304/odp-plus/commit/1d5e53850f4ebf4768f935987aed9fe4309d6785))
+
 # [1.4.0](https://github.com/VenB304/odp-plus/compare/v1.3.4...v1.4.0) (2026-02-13)
 
 
