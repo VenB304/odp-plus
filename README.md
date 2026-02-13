@@ -10,6 +10,8 @@
 
 ODP+ is a **free browser extension** that lets you play Just Dance Now together with friends online. Everyone sees the same dance moves at the same time — so you can dance together even if you're in different cities!
 
+**Your scores, accounts, and leaderboard data are completely unaffected** — ODP+ only syncs what you see on screen. Your phone still connects directly to JDN/JDNP servers for scoring.
+
 ---
 
 ## What You Need
@@ -77,7 +79,7 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
 
 ### 🎤 If You're the Host
 
-1. Go to [justdancenow.com](https://justdancenow.com)
+1. Go to [justdancenow.com](https://justdancenow.com) (or [justdancenowplus.ru](https://justdancenowplus.ru))
 2. **Start a Dance Room** on the website
 3. Click the **ODP+ icon** in your browser (puzzle piece area)
 4. Select **"Host a Party"** → Click **Apply**
@@ -87,7 +89,7 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
 
 ### 🎵 If You're Joining
 
-1. Go to [justdancenow.com](https://justdancenow.com)
+1. Go to the **same site** the host is using (justdancenow.com or justdancenowplus.ru)
 2. Click the **ODP+ icon** in your browser
 3. Select **"Join a Party"**
 4. Enter the **Room ID** your friend sent you
@@ -106,6 +108,7 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md) for full build instructions.
 | 🔌 **Can't connect to host** | Try using your phone's hotspot as internet, or check if your network blocks peer connections |
 | ⏳ **Joined late and stuck in lobby** | This is normal! Wait for the current song to finish, then you'll sync for the next one |
 | 🎬 **JDNP video won't start / freezes** | Open ODP+ popup → expand "JDNP Video CDN" → try "Auto" or switch CDN manually |
+| 📊 **Are my scores saved?** | Yes! ODP+ only syncs the browser screen. Your phone sends scores directly to JDN/JDNP servers — they're saved normally |
 | ❌ **INSTALL.bat doesn't work** | Make sure you have internet. If Node.js fails to install, download it manually from [nodejs.org](https://nodejs.org) |
 
 ---

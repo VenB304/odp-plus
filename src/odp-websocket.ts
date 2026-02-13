@@ -95,6 +95,12 @@ export class OdpWebSocket extends WebSocket {
         | ((this: WebSocket, ev: MessageEvent) => unknown)
         | null = null
 
+    // Deferral queue: holds results/songEnd events for followers
+    // when video is still playing
+    private deferredMessages: MessageEvent[] = []
+    private deferralTimer: ReturnType<typeof setTimeout> | null = null
+    private videoEndWatcher: ReturnType<typeof setInterval> | null = null
+
     constructor(
         url: string | URL,
         protocols: string | string[],
@@ -177,6 +183,28 @@ export class OdpWebSocket extends WebSocket {
                     msg = wsStringToObject(ev.data) as JDNMessage
                 } catch {
                     // Not a JDN object
+                }
+            }
+
+            // 2.3. Follower deferral: if results/songEnd arrives while
+            // the video is actively playing, queue and deliver later.
+            if (this.isFollower && msg) {
+                const endFuncs = ["results", "songEnd"]
+                if (endFuncs.includes(msg.func)) {
+                    const video = findVideoElement()
+                    if (
+                        video &&
+                        !video.paused &&
+                        !video.ended &&
+                        video.readyState >= 2
+                    ) {
+                        console.log(
+                            `[ODP] Deferring ${msg.func} — video still playing`,
+                        )
+                        this.deferredMessages.push(ev)
+                        this.startDeferralWatcher()
+                        return
+                    }
                 }
             }
 
@@ -275,6 +303,66 @@ export class OdpWebSocket extends WebSocket {
         // Only host sends to real WebSocket
         if (!this.isFollower) {
             return super.send(data)
+        }
+    }
+
+    // --- Deferral Logic ---
+
+    /**
+     * Start watching for the video to finish so we can flush
+     * deferred results/songEnd messages. Also sets a 30-second
+     * safety timeout to avoid leaving the follower stuck forever.
+     */
+    private startDeferralWatcher(): void {
+        // Already watching
+        if (this.videoEndWatcher) return
+
+        // Safety timeout — always flush after 30s no matter what
+        this.deferralTimer = setTimeout(() => {
+            console.log(
+                "[ODP] Deferral safety timeout (30s) — flushing results",
+            )
+            this.flushDeferredMessages()
+        }, 30000)
+
+        // Poll video state every 500ms
+        this.videoEndWatcher = setInterval(() => {
+            const video = findVideoElement()
+            if (!video || video.paused || video.ended || video.readyState < 2) {
+                console.log(
+                    "[ODP] Video finished — delivering deferred results",
+                )
+                this.flushDeferredMessages()
+            }
+        }, 500)
+    }
+
+    /**
+     * Deliver all queued results/songEnd messages to the game engine
+     * and clean up timers.
+     */
+    private flushDeferredMessages(): void {
+        if (this.deferralTimer) {
+            clearTimeout(this.deferralTimer)
+            this.deferralTimer = null
+        }
+        if (this.videoEndWatcher) {
+            clearInterval(this.videoEndWatcher)
+            this.videoEndWatcher = null
+        }
+
+        const msgs = this.deferredMessages.splice(0)
+        if (msgs.length === 0) return
+
+        console.log(`[ODP] Flushing ${msgs.length} deferred message(s)`)
+        for (const ev of msgs) {
+            // Re-dispatch through the onmessage handler (which won't
+            // re-defer since the video is now stopped)
+            // @ts-ignore - accessing inherited property
+            const handler = super.onmessage
+            if (handler) {
+                handler.call(this, ev)
+            }
         }
     }
 

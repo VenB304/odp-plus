@@ -19,24 +19,35 @@ ODP+ uses **WebRTC** (via [PeerJS](https://peerjs.com)) for direct peer-to-peer 
 
 ```
 ┌─────────────┐     WebSocket      ┌─────────────┐
-│   Phone 1   │ ◄─────────────────►│ JDN Server  │
-└─────────────┘                    └─────────────┘
-                                          ▲
-┌─────────────┐     WebSocket             │
+│   Phone 1   │ ◄─────────────────►│ JDN / JDNP  │
+└─────────────┘    (scoring ✅)     │   Server    │
+                                   └─────────────┘
+┌─────────────┐     WebSocket             ▲
 │   Phone 2   │ ◄─────────────────────────┤
-└─────────────┘                           │
+└─────────────┘    (scoring ✅)            │
                                           │
 ┌─────────────┐     WebSocket             │
 │ Browser     │ ◄─────────────────────────┘
-│ (Host)      │
+│ (Host)      │        (video, pictograms, scores display)
 └──────┬──────┘
        │ WebRTC (P2P)
-       ▼
-┌─────────────┐
-│ Browser     │
-│ (Follower)  │
-└─────────────┘
+       ├──────────────────┐
+       ▼                  ▼
+┌─────────────┐    ┌─────────────┐
+│ Browser     │    │ Browser     │
+│ (Follower)  │    │ (Follower)  │
+└─────────────┘    └─────────────┘
 ```
+
+### Scoring — Unaffected by ODP+
+
+ODP+ **only runs in the browser tab** (the screen showing video/pictograms). It has no involvement in the phone-to-server connection.
+
+- **Phones connect directly** to JDN/JDNP servers — ODP+ never sees or touches phone traffic
+- Score submission, leaderboards, and account data flow through the phone → server connection untouched
+- All scores are saved and uploaded normally regardless of ODP+ being active
+
+What ODP+ actually syncs between browsers: **video playback timing**, **pictogram/move display**, and **score overlays** (display only, not the actual score data).
 
 ### Scoring & High Latency
 
@@ -54,6 +65,19 @@ Scoring is handled by your **phone** (connects directly to JDN) — ODP+ syncs t
 - Host video is aligned with JDN's song clock
 - Therefore, follower video is also aligned with JDN timing
 - Phone expects moves at JDN timing — which now matches the video ✅
+
+### Follower Message Forwarding
+
+Followers forward gameplay-related messages (e.g., `playerFeedBack`, `playerMoves`) back to the Host via P2P. The Host relays these to the real JDN/JDNP server so the game engine receives browser-side game state from all participants. Connection/room messages (`connect`, `registerRoom`, `ping`, `pong`) are **not** forwarded to avoid duplicate registrations.
+
+### Results Deferral
+
+When the Host's video stream fails (common on JDNP with distant CDNs), the server may send `results`/`songEnd` before followers have finished watching. ODP+ defers these messages on followers:
+
+- If `results` or `songEnd` arrives while the follower's video is **still playing**, the message is queued
+- The queued messages are delivered when the video finishes (pauses/ends) or the element is removed
+- A **30-second safety timeout** prevents followers from getting stuck indefinitely
+- Host behavior is unchanged — the Host always processes server messages immediately
 
 ### Clock Sync Details
 
