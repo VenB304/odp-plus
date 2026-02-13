@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/VenB304/odp-plus/compare/v1.3.4...v1.4.0) (2026-02-13)
+
+
+### Features
+
+* add JDNP CDN override and popup controls ([e6fb46f](https://github.com/VenB304/odp-plus/commit/e6fb46ffbb9045f409df73fc235e3765cce2654f))
+
 ## [1.3.4](https://github.com/VenB304/odp-plus/compare/v1.3.3...v1.3.4) (2026-02-13)
 
 
