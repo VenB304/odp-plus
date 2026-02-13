@@ -115,6 +115,22 @@ export class P2POrchestrator {
     }
 
     /**
+     * Forward a message to the host (follower only).
+     * The host will relay it to the JDN server so the game can
+     * receive scoring, pictogram, and other gameplay responses.
+     */
+    public forwardToHost(data: unknown): void {
+        if (!this.p2pClient) return
+        const peerIds = this.p2pClient.getPeerIds()
+        if (peerIds.length > 0) {
+            this.p2pClient.sendTo(peerIds[0], {
+                __type: "__forward",
+                payload: data,
+            })
+        }
+    }
+
+    /**
      * Check if P2P is initialized.
      */
     public get isInitialized(): boolean {
