@@ -1,3 +1,15 @@
+# [1.3.0](https://github.com/VenB304/odp-plus/compare/v1.2.4...v1.3.0) (2026-02-13)
+
+
+### Bug Fixes
+
+* address code review feedback - proper backoff delay and accessibility ([aa470e6](https://github.com/VenB304/odp-plus/commit/aa470e649950680e0ba66279b47d3788412094f7))
+
+
+### Features
+
+* improve UX and P2P connection resilience ([8952133](https://github.com/VenB304/odp-plus/commit/895213369b863de696b6b02aab4395c25603ddbe))
+
 ## [1.2.4](https://github.com/VenB304/odp-plus/compare/v1.2.3...v1.2.4) (2026-02-13)
 
 
