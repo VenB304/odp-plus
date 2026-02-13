@@ -1,3 +1,10 @@
+## [1.2.4](https://github.com/VenB304/odp-plus/compare/v1.2.3...v1.2.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* sync pictograms and scoring between host and followers ([7455749](https://github.com/VenB304/odp-plus/commit/7455749bcb617742539e34fc83c33a2bdcc9f831))
+
 ## [1.2.3](https://github.com/VenB304/odp-plus/compare/v1.2.2...v1.2.3) (2026-02-08)
 
 ## [1.2.2](https://github.com/VenB304/odp-plus/compare/v1.2.1...v1.2.2) (2026-02-07)
