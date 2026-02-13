@@ -40,15 +40,16 @@ ODP+ uses **WebRTC** (via [PeerJS](https://peerjs.com)) for direct peer-to-peer 
 
 ### Scoring & High Latency
 
-Scoring is handled by your **phone** (connects directly to JDN) — ODP+ only syncs the video.
+Scoring is handled by your **phone** (connects directly to JDN) — ODP+ syncs the video, pictograms, and scoring display between Host and Followers.
 
 | Client | Syncs with | Purpose |
 |--------|------------|---------|
-| Phone | JDN servers | Scoring |
-| Browser (Host) | JDN servers | Video |
-| Browser (Follower) | Host via ODP+ | Video (offset-corrected) |
+| Phone | JDN servers | Scoring (input) |
+| Browser (Host) | JDN servers | Video, Pictograms, Scores |
+| Browser (Follower) | Host via ODP+ | Video, Pictograms, Scores (offset-corrected) |
 
-**Why scoring works for high-latency followers:**
+**How sync works:**
+- Host relays all game messages (scoring, pictograms, moves) to Followers via P2P
 - ODP+ calculates a clock offset so follower video matches host timing
 - Host video is aligned with JDN's song clock
 - Therefore, follower video is also aligned with JDN timing

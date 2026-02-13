@@ -209,6 +209,16 @@ export class OdpWebSocket extends WebSocket {
                     const msg = wsStringToObject(data) as JDNMessage
                     this.orchestrator?.handleMessage(msg)
                     this.orchestrator?.broadcastRaw(msg)
+
+                    // Broadcast SongStart ODP message with timestamp
+                    // so followers can do clock-offset-corrected video sync
+                    this.orchestrator?.broadcastRaw(
+                        "06BJ" +
+                            JSON.stringify({
+                                tag: "SongStart",
+                                contents: { startTime: Date.now() },
+                            }),
+                    )
                 } catch {
                     // Continue with send
                 }
@@ -216,6 +226,13 @@ export class OdpWebSocket extends WebSocket {
                 // Handle follower-specific messages
                 if (func === "ping") {
                     this.handleP2PData({ func: "pong" }, "internal-auto-pong")
+                    return
+                }
+                // Forward gameplay-related messages to host for server relay.
+                // Skip connection/room messages to avoid duplicate registrations.
+                const skipFuncs = ["connect", "registerRoom", "ping", "pong"]
+                if (!skipFuncs.includes(func)) {
+                    this.orchestrator?.forwardToHost(data)
                 }
                 return // Don't send to real WebSocket
             }
@@ -315,13 +332,43 @@ export class OdpWebSocket extends WebSocket {
     }
 
     private handleP2PData(data: unknown, _peerId: string): void {
-        const dataStr = wsObjectToString(data)
+        // Handle forwarded messages from followers (host only)
+        if (
+            this.isHost &&
+            data != null &&
+            typeof data === "object" &&
+            "__type" in data &&
+            (data as { __type: string }).__type === "__forward" &&
+            "payload" in data
+        ) {
+            const payload = (data as { payload: unknown }).payload
+            // Validate: must be a string with at least a 4-char prefix + some content
+            if (typeof payload === "string" && payload.length > 4) {
+                try {
+                    // Validate it's a parseable JDN message
+                    wsStringToObject(payload)
+                    super.send(payload)
+                } catch {
+                    console.warn("[ODP] Rejected invalid forwarded message")
+                }
+            }
+            return
+        }
+
+        // Strings (ODP protocol messages like "06BJ...") are passed as-is
+        const dataStr = typeof data === "string" ? data : wsObjectToString(data)
         const event = new MessageEvent("message", {
             data: dataStr,
             origin: "wss://p2p-simulation",
         })
 
-        if (this.gameOnMessage) {
+        // Route through the onmessage interceptor so ODP messages
+        // (Connected, SongStart, ServerMsg) are properly handled
+        // @ts-ignore - accessing inherited property
+        const handler = super.onmessage
+        if (handler) {
+            handler.call(this, event)
+        } else if (this.gameOnMessage) {
             // @ts-ignore - calling handler
             this.gameOnMessage(event)
         } else {
