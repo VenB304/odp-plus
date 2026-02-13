@@ -21,6 +21,12 @@ export class P2POrchestrator {
     private cachedRegisterRoomMsg: JDNMessage | null = null
     private pendingRTTProbes = new Map<string, (t1: number) => void>()
     private config: OrchestratorConfig
+    private readyPeers: Set<string> = new Set()
+    private finishedPeers: Set<string> = new Set()
+    private hostVideoReady: boolean = false
+    private songStartResolver: (() => void) | null = null
+    private resultsSyncResolver: (() => void) | null = null
+    private syncTimeout: ReturnType<typeof setTimeout> | null = null
 
     constructor(config: OrchestratorConfig) {
         this.config = config
@@ -156,6 +162,130 @@ export class P2POrchestrator {
         const handler = this.pendingRTTProbes.get(peerId)
         if (handler) {
             handler(data.t1)
+        }
+    }
+
+    // --- Sync Gate API ---
+
+    /**
+     * Reset all sync-gate state at the start of a new song.
+     */
+    public resetSyncGates(): void {
+        this.readyPeers.clear()
+        this.finishedPeers.clear()
+        this.hostVideoReady = false
+        this.songStartResolver = null
+        this.resultsSyncResolver = null
+        if (this.syncTimeout) clearTimeout(this.syncTimeout)
+    }
+
+    /**
+     * Mark the host's own video as ready to play.
+     */
+    public markHostVideoReady(): void {
+        this.hostVideoReady = true
+        this.checkStartReadiness()
+    }
+
+    /**
+     * Record that a follower's video is buffered and ready.
+     */
+    public handleReadyToStart(peerId: string): void {
+        const peerIds = this.p2pClient?.getPeerIds() ?? []
+        if (peerIds.includes(peerId)) {
+            this.readyPeers.add(peerId)
+            this.checkStartReadiness()
+        }
+    }
+
+    /**
+     * Record that a follower's video has finished playing.
+     */
+    public handleReadyForResults(peerId: string): void {
+        const peerIds = this.p2pClient?.getPeerIds() ?? []
+        if (peerIds.includes(peerId)) {
+            this.finishedPeers.add(peerId)
+            this.checkResultsReadiness()
+        }
+    }
+
+    /**
+     * Returns a promise that resolves once the host video AND
+     * every connected follower have signalled readiness
+     * (or the timeout fires).
+     */
+    public async waitForAllReady(timeoutMs: number = 15000): Promise<void> {
+        const activePeers = this.p2pClient?.getPeerIds() ?? []
+        if (activePeers.length === 0 && this.hostVideoReady) {
+            return
+        }
+
+        return new Promise<void>((resolve) => {
+            this.songStartResolver = resolve
+            this.syncTimeout = setTimeout(() => {
+                console.log("[P2P] Start sync timeout — starting anyway")
+                this.resolveStartSync()
+            }, timeoutMs)
+            this.checkStartReadiness()
+        })
+    }
+
+    /**
+     * Returns a promise that resolves once every connected follower
+     * has signalled that their video has ended (or the timeout fires).
+     */
+    public async waitForAllFinished(timeoutMs: number = 15000): Promise<void> {
+        const activePeers = this.p2pClient?.getPeerIds() ?? []
+        if (activePeers.length === 0) return
+
+        return new Promise<void>((resolve) => {
+            this.resultsSyncResolver = resolve
+            this.syncTimeout = setTimeout(() => {
+                console.log(
+                    "[P2P] Results sync timeout — showing results anyway",
+                )
+                this.resolveResultsSync()
+            }, timeoutMs)
+            this.checkResultsReadiness()
+        })
+    }
+
+    private checkStartReadiness(): void {
+        const activePeers = this.p2pClient?.getPeerIds() ?? []
+        const allPeersReady = activePeers.every((id) => this.readyPeers.has(id))
+
+        if (
+            this.hostVideoReady &&
+            (activePeers.length === 0 || allPeersReady)
+        ) {
+            this.resolveStartSync()
+        }
+    }
+
+    private checkResultsReadiness(): void {
+        const activePeers = this.p2pClient?.getPeerIds() ?? []
+        const allPeersFinished = activePeers.every((id) =>
+            this.finishedPeers.has(id),
+        )
+
+        if (activePeers.length === 0 || allPeersFinished) {
+            this.resolveResultsSync()
+        }
+    }
+
+    private resolveStartSync(): void {
+        if (this.syncTimeout) clearTimeout(this.syncTimeout)
+        if (this.songStartResolver) {
+            this.songStartResolver()
+            this.songStartResolver = null
+        }
+    }
+
+    private resolveResultsSync(): void {
+        if (this.syncTimeout) clearTimeout(this.syncTimeout)
+        if (this.resultsSyncResolver) {
+            this.resultsSyncResolver()
+            this.resultsSyncResolver = null
         }
     }
 

@@ -95,11 +95,13 @@ export class OdpWebSocket extends WebSocket {
         | ((this: WebSocket, ev: MessageEvent) => unknown)
         | null = null
 
-    // Deferral queue: holds results/songEnd events for followers
-    // when video is still playing
+    // Deferral queue: holds results/songEnd events until sync
     private deferredMessages: MessageEvent[] = []
     private deferralTimer: ReturnType<typeof setTimeout> | null = null
     private videoEndWatcher: ReturnType<typeof setInterval> | null = null
+    private hostResultsSyncActive = false
+    private isFlushing = false
+    private followerReadinessWatcherActive = false
 
     constructor(
         url: string | URL,
@@ -186,25 +188,57 @@ export class OdpWebSocket extends WebSocket {
                 }
             }
 
-            // 2.3. Follower deferral: if results/songEnd arrives while
-            // the video is actively playing, queue and deliver later.
+            // 2.2. Follower start sync: begin watching video readiness
             if (this.isFollower && msg) {
+                if (msg.func === "songStart" || msg.func === "songLaunch") {
+                    this.startFollowerReadinessWatcher()
+                }
+            }
+
+            // 2.3. Host end sync: defer results for synchronized display
+            if (this.isHost && msg && !this.isFlushing) {
                 const endFuncs = ["results", "songEnd"]
                 if (endFuncs.includes(msg.func)) {
-                    const video = findVideoElement()
-                    if (
-                        video &&
-                        !video.paused &&
-                        !video.ended &&
-                        video.readyState >= 2
-                    ) {
-                        console.log(
-                            `[ODP] Deferring ${msg.func} — video still playing`,
-                        )
-                        this.deferredMessages.push(ev)
-                        this.startDeferralWatcher()
-                        return
+                    // Broadcast to followers (they will defer)
+                    this.handleHostMessage(msg)
+                    // Defer host's own display
+                    this.deferredMessages.push(ev)
+                    // Start waiting for followers
+                    if (!this.hostResultsSyncActive) {
+                        this.handleHostResultsSync()
                     }
+                    return
+                }
+            }
+
+            // 2.4. Follower end sync: always defer results, wait for
+            // host __showResults signal before flushing.
+            if (this.isFollower && msg && !this.isFlushing) {
+                const endFuncs = ["results", "songEnd"]
+                if (endFuncs.includes(msg.func)) {
+                    console.log(
+                        "[Sync] Deferring results, waiting for host signal",
+                    )
+                    this.deferredMessages.push(ev)
+                    // If video already done, report immediately
+                    const video = findVideoElement()
+                    if (!video || video.ended || video.paused) {
+                        this.sendControlToHost({
+                            __type: "__readyForResults",
+                        })
+                    } else {
+                        this.startFollowerEndWatcher()
+                    }
+                    // Safety timeout (30s)
+                    if (!this.deferralTimer) {
+                        this.deferralTimer = setTimeout(() => {
+                            console.log(
+                                "[ODP] Deferral safety timeout (30s) — flushing results",
+                            )
+                            this.flushDeferredMessages()
+                        }, 30000)
+                    }
+                    return
                 }
             }
 
@@ -214,7 +248,7 @@ export class OdpWebSocket extends WebSocket {
             }
 
             // 3. Host-specific logic
-            if (this.isHost && msg) {
+            if (this.isHost && msg && !this.isFlushing) {
                 this.handleHostMessage(msg)
             }
 
@@ -270,17 +304,12 @@ export class OdpWebSocket extends WebSocket {
                 try {
                     const msg = wsStringToObject(data) as JDNMessage
                     this.orchestrator?.handleMessage(msg)
+                    // Broadcast JDN message immediately so followers start loading
                     this.orchestrator?.broadcastRaw(msg)
 
-                    // Broadcast SongStart ODP message with timestamp
-                    // so followers can do clock-offset-corrected video sync
-                    this.orchestrator?.broadcastRaw(
-                        "06BJ" +
-                            JSON.stringify({
-                                tag: "SongStart",
-                                contents: { startTime: Date.now() },
-                            }),
-                    )
+                    // Start synchronized song start process
+                    this.orchestrator?.resetSyncGates()
+                    this.handleSyncedSongStart()
                 } catch {
                     // Continue with send
                 }
@@ -308,33 +337,158 @@ export class OdpWebSocket extends WebSocket {
 
     // --- Deferral Logic ---
 
+    // --- Sync Helpers ---
+
     /**
-     * Start watching for the video to finish so we can flush
-     * deferred results/songEnd messages. Also sets a 30-second
-     * safety timeout to avoid leaving the follower stuck forever.
+     * Host: snapshot when the host video actually started,
+     * wait for followers to buffer, then broadcast the real
+     * start timestamp so followers can sync to the host.
+     *
+     * The host video is already playing (the game engine loaded
+     * it before calling ws.send(songStart)), so we must NOT
+     * seek it — the host is the authoritative timeline.
      */
-    private startDeferralWatcher(): void {
-        // Already watching
+    private async handleSyncedSongStart(): Promise<void> {
+        console.log("[Sync] Waiting for host video readiness...")
+
+        await this.waitForHostVideoReady()
+
+        // Snapshot the host's actual start time from its current
+        // playback position BEFORE we wait for followers.
+        const video = findVideoElement()
+        const hostStartTime =
+            Date.now() - (video ? video.currentTime * 1000 : 0)
+        console.log(
+            `[Sync] Host video start time: ${hostStartTime} ` +
+                `(video at ${video?.currentTime?.toFixed(2) ?? 0}s)`,
+        )
+
+        this.orchestrator?.markHostVideoReady()
+
+        // Wait for all followers (or timeout)
+        await this.orchestrator?.waitForAllReady(15000)
+
+        console.log("[Sync] All ready (or timeout). Broadcasting start time.")
+
+        // Broadcast the host's actual start timestamp.
+        // Followers will sync their video to this via songStartSync.
+        this.orchestrator?.broadcastRaw(
+            "06BJ" +
+                JSON.stringify({
+                    tag: "SongStart",
+                    contents: { startTime: hostStartTime },
+                }),
+        )
+
+        // Host video is already playing correctly — no seek needed.
+    }
+
+    /**
+     * Polls until a <video> element exists with readyState >= 3
+     * (HAVE_FUTURE_DATA), meaning playback can start without stalling.
+     * Times out after 20 seconds to prevent hanging forever if the
+     * video element never appears or never buffers.
+     */
+    private waitForHostVideoReady(): Promise<void> {
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                console.warn("[Sync] Host video readiness timeout (20s)")
+                resolve()
+            }, 20000)
+
+            const check = () => {
+                const video = findVideoElement()
+                if (video && video.readyState >= 3) {
+                    clearTimeout(timeout)
+                    resolve()
+                } else {
+                    setTimeout(check, 200)
+                }
+            }
+            check()
+        })
+    }
+
+    /**
+     * Host: wait for all followers to report __readyForResults,
+     * then broadcast __showResults and flush own deferred messages.
+     */
+    private async handleHostResultsSync(): Promise<void> {
+        this.hostResultsSyncActive = true
+        console.log("[Sync] Host waiting for followers to finish...")
+
+        await this.orchestrator?.waitForAllFinished(15000)
+
+        console.log("[Sync] Everyone finished. Showing results.")
+
+        // Tell every follower to flush their deferred results
+        this.orchestrator?.broadcastRaw({ __type: "__showResults" })
+
+        // Flush host's own deferred messages
+        this.flushDeferredMessages()
+        this.hostResultsSyncActive = false
+    }
+
+    /**
+     * Follower: poll for the video element to become sufficiently
+     * buffered, then signal the host with __readyToStart.
+     * Guarded to prevent duplicate watchers (e.g. if both songStart
+     * and songLaunch arrive).
+     */
+    private startFollowerReadinessWatcher(): void {
+        if (this.followerReadinessWatcherActive) return
+        this.followerReadinessWatcherActive = true
+
+        const checkInterval = setInterval(() => {
+            const video = findVideoElement()
+            if (video && video.readyState >= 3) {
+                clearInterval(checkInterval)
+                this.followerReadinessWatcherActive = false
+                console.log("[Sync] Video ready, signaling host")
+                this.sendControlToHost({ __type: "__readyToStart" })
+            }
+        }, 200)
+
+        // Safety: stop checking after 20 seconds and send fallback
+        // so the host doesn't wait the full gate timeout.
+        setTimeout(() => {
+            if (this.followerReadinessWatcherActive) {
+                clearInterval(checkInterval)
+                this.followerReadinessWatcherActive = false
+                console.warn(
+                    "[Sync] Readiness watcher timeout (20s) — signaling host anyway",
+                )
+                this.sendControlToHost({ __type: "__readyToStart" })
+            }
+        }, 20000)
+    }
+
+    /**
+     * Follower: watch for the video to finish playing, then
+     * signal the host with __readyForResults.
+     */
+    private startFollowerEndWatcher(): void {
         if (this.videoEndWatcher) return
 
-        // Safety timeout — always flush after 30s no matter what
-        this.deferralTimer = setTimeout(() => {
-            console.log(
-                "[ODP] Deferral safety timeout (30s) — flushing results",
-            )
-            this.flushDeferredMessages()
-        }, 30000)
-
-        // Poll video state every 500ms
         this.videoEndWatcher = setInterval(() => {
             const video = findVideoElement()
             if (!video || video.paused || video.ended || video.readyState < 2) {
-                console.log(
-                    "[ODP] Video finished — delivering deferred results",
-                )
-                this.flushDeferredMessages()
+                console.log("[Sync] Video finished — signaling host")
+                clearInterval(this.videoEndWatcher!)
+                this.videoEndWatcher = null
+                this.sendControlToHost({
+                    __type: "__readyForResults",
+                })
             }
         }, 500)
+    }
+
+    /**
+     * Send a P2P control message toward the host.
+     * For followers broadcastRaw reaches only the host.
+     */
+    private sendControlToHost(msg: unknown): void {
+        this.orchestrator?.broadcastRaw(msg)
     }
 
     /**
@@ -355,15 +509,17 @@ export class OdpWebSocket extends WebSocket {
         if (msgs.length === 0) return
 
         console.log(`[ODP] Flushing ${msgs.length} deferred message(s)`)
+        this.isFlushing = true
         for (const ev of msgs) {
-            // Re-dispatch through the onmessage handler (which won't
-            // re-defer since the video is now stopped)
+            // Re-dispatch through the onmessage handler
+            // (isFlushing prevents re-deferral or re-broadcast)
             // @ts-ignore - accessing inherited property
             const handler = super.onmessage
             if (handler) {
                 handler.call(this, ev)
             }
         }
+        this.isFlushing = false
     }
 
     // --- Private Handlers ---
@@ -529,6 +685,23 @@ export class OdpWebSocket extends WebSocket {
                 }
             }
             return
+        }
+
+        // Handle sync control messages
+        if (data != null && typeof data === "object" && "__type" in data) {
+            const typed = data as { __type: string }
+            if (typed.__type === "__readyToStart") {
+                this.orchestrator?.handleReadyToStart(_peerId)
+                return
+            }
+            if (typed.__type === "__readyForResults") {
+                this.orchestrator?.handleReadyForResults(_peerId)
+                return
+            }
+            if (typed.__type === "__showResults") {
+                this.flushDeferredMessages()
+                return
+            }
         }
 
         // Strings (ODP protocol messages like "06BJ...") are passed as-is
